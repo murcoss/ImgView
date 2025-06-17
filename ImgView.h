@@ -73,7 +73,7 @@ private:
     QList<ImgStruct*> m_allImages;
     QVector<QPushButton*> m_buttons;
     QPoint m_lastMousePos;
-    QPoint m_offset;
+    QPointF m_offset;
     QPoint m_pressed;
     double m_zoom = 1.;
     bool m_show_overlay = false;

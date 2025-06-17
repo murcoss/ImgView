@@ -155,21 +155,25 @@ void ImgView::mouseReleaseEvent(QMouseEvent* event){
     QWidget::mouseReleaseEvent(event);
 }
 
-void ImgView::wheelEvent(QWheelEvent* event){
+void ImgView::wheelEvent(QWheelEvent* event) {
     int const angle = event->angleDelta().y();
     if (angle != 0) {
         if (QGuiApplication::keyboardModifiers().testFlag(Qt::ControlModifier)) {
-            double const mul = 1. + (0.1 * angle / 120.);
-            m_zoom *= mul;
-            m_offset *= mul;
-            update();
-        } else {
             FileDir const fd = angle > 0 ? FileDir::previous : FileDir::next;
             nextImage(fd);
+        } else {
+            double const mul = 1. + (0.1 * angle / 120.);
+            QPointF const mousePos = event->position();
+            QPointF const beforeScale = (mousePos - m_offset - QPointF(width() / 2., height() / 2.)) / m_zoom;
+            m_zoom *= mul;
+            m_offset = mousePos - (beforeScale * m_zoom) - QPointF(width() / 2., height() / 2.);
+            update();
         }
     }
     event->accept();
 }
+
+
 
 void ImgView::leaveEvent(QEvent*){
     m_lastMousePos = QPoint(-1, -1);
