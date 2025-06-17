@@ -65,6 +65,20 @@ ImgView::ImgView(QWidget* parent)
         nextImage(FileDir::previous);
     });
 
+    QSettings settings("Adi", "ImgView");
+    m_wheel_zoom = settings.value("Wheel zoom").toBool();
+    QPushButton* btnWheelFunction = new QPushButton(m_wheel_zoom ? QStringLiteral(u"🔍") : QStringLiteral(u"🔃"), this);
+    btnWheelFunction->setToolTip(QStringLiteral(u"Wheel function"));
+    btnWheelFunction->setFixedSize(24, 24);
+    btnWheelFunction->raise();
+    m_buttons.push_back(btnWheelFunction);
+    connect(btnWheelFunction, &QPushButton::clicked, [=,this]() {
+        m_wheel_zoom = !m_wheel_zoom;
+        btnWheelFunction->setText(m_wheel_zoom ? QStringLiteral(u"🔍") : QStringLiteral(u"🔃"));
+        QSettings settings("Adi", "ImgView");
+        settings.setValue("Wheel zoom", m_wheel_zoom);
+        });
+
     QByteArrayList const bal = QImageReader::supportedImageFormats();
     m_supported_extensions.clear();
     for (auto const& b : bal) {
@@ -158,7 +172,8 @@ void ImgView::mouseReleaseEvent(QMouseEvent* event){
 void ImgView::wheelEvent(QWheelEvent* event) {
     int const angle = event->angleDelta().y();
     if (angle != 0) {
-        if (QGuiApplication::keyboardModifiers().testFlag(Qt::ControlModifier)) {
+        bool const ctrl = QGuiApplication::keyboardModifiers().testFlag(Qt::ControlModifier);
+        if (ctrl xor !m_wheel_zoom) {
             FileDir const fd = angle > 0 ? FileDir::previous : FileDir::next;
             nextImage(fd);
         } else {

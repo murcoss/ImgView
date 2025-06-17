@@ -66,6 +66,7 @@ signals:
 
 private:
     void customContextMenu(QPoint pos);
+    void btnWheelZoomIconUpdate();
     void nextImage(FileDir fd);
     void setTitle();
 
@@ -78,4 +79,5 @@ private:
     double m_zoom = 1.;
     bool m_show_overlay = false;
     bool m_show_text = false;
+    bool m_wheel_zoom = true;
 };
