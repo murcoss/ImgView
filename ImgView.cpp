@@ -5,6 +5,10 @@
 #include <QSettings>
 #include <QThreadPool>
 #include <QMimeData>
+#include <QDirIterator>
+#include <QInputDialog>
+#include <QSvgRenderer>
+#include <QtConcurrent>
 
 #include "ImgView.h"
 #include "IconEngine.h"
@@ -12,10 +16,84 @@
 void ImgLoaderTask::run(){
     if (imgStruct) {
         QMutexLocker const locker(&imgStruct->mutex);
-        QPixmap pix;
-        if (pix.load(imgStruct->fi.absoluteFilePath())) {
-            imgStruct->img = std::move(pix);
-            emit loaded(imgStruct->idx);
+        if (imgStruct->worktodo.contains(ImgStruct::WorkToDo::createThumbnail) && !imgStruct->worktodo.contains(ImgStruct::WorkToDo::loadImage)) {
+            imgStruct->worktodo.insert(ImgStruct::WorkToDo::loadImage);
+            imgStruct->worktodo.insert(ImgStruct::WorkToDo::destroyImage);
+        }
+        if (imgStruct->worktodo.contains(ImgStruct::WorkToDo::loadImage)) {
+            QImageReader reader(imgStruct->fi.absoluteFilePath());
+            QImage img;
+            if (reader.read(&img)) {
+                imgStruct->img = std::move(QPixmap::fromImage(img));
+                emit loaded(imgStruct->idx);
+            } else {
+                imgStruct->errormessage = reader.errorString();
+            }
+        }
+        if (imgStruct->worktodo.contains(ImgStruct::WorkToDo::createThumbnail)) {
+            imgStruct->thumbnail = imgStruct->img.scaled(QSize(256, 256), Qt::KeepAspectRatio);
+        }
+        if (imgStruct->worktodo.contains(ImgStruct::WorkToDo::destroyImage)) {
+            imgStruct->img = std::move(QPixmap());
+        }
+        imgStruct->worktodo.clear();
+    }
+}
+
+void DirIteratorTask::run(){
+    QElapsedTimer ti;
+    ti.start();
+
+    QList<ImgStruct*> tmpstruct;
+
+    if (m_fns.isEmpty()){
+        return;
+    }
+
+    //Read file list as a list of file
+    QString filetoshowfirst;
+    int idx = 0;
+    for (auto const& fn : m_fns) {
+        QFileInfo fi(fn);
+        if (ImgView::supportedExtensions().contains(fi.suffix().toLower())) {
+            tmpstruct.push_back(new ImgStruct);
+            tmpstruct.back()->fn = fn;
+            tmpstruct.back()->fi = fi;
+            tmpstruct.back()->idx = idx++;
+            filetoshowfirst = fn;
+        }
+    }
+
+    if (!tmpstruct.isEmpty()) {
+        emit loadedFilenames(tmpstruct);
+        tmpstruct.clear();
+    }
+
+    //If we got a list of files, only load these
+    if ((m_fns.size() > 1) && !QFileInfo(m_fns.front()).isDir()) {
+        return;
+    }
+
+    //If it is a directory or only one file, iterate the directory
+    QFileInfo fi(m_fns.front());
+    QString dir = fi.isDir() ? fi.absoluteFilePath() : fi.absolutePath();
+    QDirIterator it(dir, QDir::Files, m_itf);
+    while (it.hasNext()) {
+        QString const file = it.next();
+        if (file != filetoshowfirst) {
+            QFileInfo fi(file);
+            if (ImgView::supportedExtensions().contains(fi.suffix().toLower())) {
+                tmpstruct.push_back(new ImgStruct);
+                tmpstruct.back()->fn = file;
+                tmpstruct.back()->fi = fi;
+                tmpstruct.back()->idx = idx++;
+            }
+        }
+
+        if ((ti.elapsed() > 500) || !it.hasNext()) {
+            ti.restart();
+            emit loadedFilenames(tmpstruct);
+            tmpstruct.clear();
         }
     }
 }
@@ -28,9 +106,6 @@ ImgView::ImgView(QWidget* parent)
 
     connect(this, &ImgView::customContextMenuRequested, this, &ImgView::customContextMenu);
 
-    resize(800, 600);
-    QTimer::singleShot(0, [this]() { resizeEvent(0); });
-
     QPushButton* btnLoad = new QPushButton("📂", this);
     btnLoad->setToolTip(QStringLiteral(u"Load Image"));
     btnLoad->setFixedSize(24, 24);
@@ -38,6 +113,15 @@ ImgView::ImgView(QWidget* parent)
     m_buttons.push_back(btnLoad);
     connect(btnLoad, &QPushButton::clicked, [this]() {
         loadImage(QStringList());
+    });
+
+    QPushButton* btnOpen = new QPushButton("📂", this);
+    btnOpen->setToolTip(QStringLiteral(u"Open Folder"));
+    btnOpen->setFixedSize(24, 24);
+    btnOpen->raise();
+    m_buttons.push_back(btnOpen);
+    connect(btnOpen, &QPushButton::clicked, [this]() {
+        openFolder(QString());
     });
 
     QPushButton* btnFit = new QPushButton("⤢", this);
@@ -65,7 +149,17 @@ ImgView::ImgView(QWidget* parent)
         nextImage(FileDir::previous);
     });
 
-    QSettings settings("Adi", "ImgView");
+    QPushButton* btnThumb = new QPushButton("🖼", this);
+    btnThumb->setToolTip(QStringLiteral(u"Load previous Image"));
+    btnThumb->setFixedSize(24, 24);
+    btnThumb->raise();
+    m_buttons.push_back(btnThumb);
+    connect(btnThumb, &QPushButton::clicked, [this]() {
+        m_show_thumb = !m_show_thumb;
+        update();
+    });
+
+    QSettings settings("ImgView", "ImgView");
     m_wheel_zoom = settings.value("Wheel zoom").toBool();
     QPushButton* btnWheelFunction = new QPushButton(m_wheel_zoom ? QStringLiteral(u"🔍") : QStringLiteral(u"🔃"), this);
     btnWheelFunction->setToolTip(QStringLiteral(u"Wheel function"));
@@ -75,7 +169,7 @@ ImgView::ImgView(QWidget* parent)
     connect(btnWheelFunction, &QPushButton::clicked, [=,this]() {
         m_wheel_zoom = !m_wheel_zoom;
         btnWheelFunction->setText(m_wheel_zoom ? QStringLiteral(u"🔍") : QStringLiteral(u"🔃"));
-        QSettings settings("Adi", "ImgView");
+        QSettings settings("ImgView", "ImgView");
         settings.setValue("Wheel zoom", m_wheel_zoom);
         });
 
@@ -83,6 +177,9 @@ ImgView::ImgView(QWidget* parent)
     m_supported_extensions.clear();
     for (auto const& b : bal) {
         m_supported_extensions.insert(b.toLower());
+    }
+    if (m_supported_extensions.contains("svg")){
+        m_supported_extensions.remove("svg");
     }
 };
 
@@ -94,8 +191,8 @@ void ImgView::paintEvent(QPaintEvent*){
     timer.start();
     QPainter p(this);
 
-    if (m_allImages.isEmpty()) {
-        //just draw logo
+    if (!m_imgstruct) {
+        //just draw logo and quit
         IconEngine ie;
         QSize const si(160, 160);
         QRect const rect(QPoint(width() / 2 - si.width() / 2, height() / 2 - si.height() / 2), si);
@@ -103,16 +200,29 @@ void ImgView::paintEvent(QPaintEvent*){
         return;
     }
 
-    if (m_allImages.front()->img.isNull()) {
-        // Has to be loaded by loadertreads, now just quit;
+    ImgStruct &i = *m_imgstruct; 
+    QString err;
+    bool locked = false;
+    if (i.mutex.tryLock()) {
+        if (i.img.isNull()) {
+            if (i.thumbnail.isNull()) {
+                bool const e = !i.errormessage.isEmpty();
+                err = e ? i.errormessage : QStringLiteral(u"Loading...");
+            }
+        }
+        locked = true;
+    } else {
+        err = QStringLiteral(u"Loading...");
     }
-    QMutexLocker locker(&m_allImages.front()->mutex);
-    QPixmap const& img = m_allImages.front()->img;
 
-    p.setRenderHint(QPainter::RenderHint::TextAntialiasing);
+    if (!locked) {
+        p.drawText(rect(), Qt::AlignCenter, err);
+        return;
+    }
 
-    qreal const dpr = p.device()->devicePixelRatioF();
-    p.save();
+    bool showThumb = m_show_thumb || i.img.isNull();
+    QPixmap const& img = m_show_thumb ? i.thumbnail : i.img;
+
     p.translate(m_offset);
     qreal wi = width() / 2.;
     qreal he = height() / 2.;
@@ -120,46 +230,45 @@ void ImgView::paintEvent(QPaintEvent*){
     p.scale(m_zoom, m_zoom);
     p.translate(-wi, -he);
 
-    QSize const scaledSize = img.size().scaled(size(), Qt::KeepAspectRatio);
-    QPointF const topLeft(
-        (width() - scaledSize.width()) / 2.0,
-        (height() - scaledSize.height()) / 2.0);
+    QSize scaledSize;
+    if (i.img.isNull()) {
+        scaledSize = i.thumbnail.size().scaled(size(), Qt::KeepAspectRatio);
+    } else {
+        scaledSize = i.img.size().scaled(size(), Qt::KeepAspectRatio);
+    }
+
+    if (scaledSize.width() < img.size().width()){
+        p.setRenderHint(QPainter::RenderHint::SmoothPixmapTransform);
+    }
+
+    QPointF const topLeft((width() - scaledSize.width()) / 2.0,(height() - scaledSize.height()) / 2.0);
     QRectF const targetRect(topLeft, scaledSize);
     p.drawPixmap(targetRect, img, QRectF(QPointF(0, 0), img.size()));
 
-    double scx = double(scaledSize.width()) / double(img.width());
-    double scy = double(scaledSize.height()) / double(img.height());
-
-    p.scale(scx, scy);
-
-    p.restore();
+    qDebug() << "Paintevent time: " << timer.nsecsElapsed() / 1000;
 }
 
-void ImgView::mouseDoubleClickEvent(QMouseEvent*)
-{
+void ImgView::mouseDoubleClickEvent(QMouseEvent*){
     autofit();
 }
 
-void ImgView::autofit()
-{
+void ImgView::autofit(){
     m_zoom = 1.;
     m_offset = { 0, 0 };
     update();
 }
 
-void ImgView::mousePressEvent(QMouseEvent* event)
-{
+void ImgView::mousePressEvent(QMouseEvent* event){
     m_lastMousePos = event->pos();
     event->accept();
 }
 
-void ImgView::mouseMoveEvent(QMouseEvent* event)
-{
+void ImgView::mouseMoveEvent(QMouseEvent* event){
     if (event->buttons() & Qt::LeftButton) {
-        QPoint delta = event->pos() - m_lastMousePos;
+        QPoint const delta = event->pos() - m_lastMousePos;
         m_offset += delta;
         m_lastMousePos = event->pos();
-        update(); // trigger repaint
+        update();
     }
     QWidget::mouseMoveEvent(event);
 }
@@ -173,22 +282,21 @@ void ImgView::wheelEvent(QWheelEvent* event) {
     int const angle = event->angleDelta().y();
     if (angle != 0) {
         bool const ctrl = QGuiApplication::keyboardModifiers().testFlag(Qt::ControlModifier);
-        if (ctrl xor !m_wheel_zoom) {
+        if (ctrl == m_wheel_zoom) {
             FileDir const fd = angle > 0 ? FileDir::previous : FileDir::next;
             nextImage(fd);
         } else {
-            double const mul = 1. + (0.1 * angle / 120.);
+            double const factor = std::pow(1.2, angle / 120.);
             QPointF const mousePos = event->position();
             QPointF const beforeScale = (mousePos - m_offset - QPointF(width() / 2., height() / 2.)) / m_zoom;
-            m_zoom *= mul;
+            m_zoom *= factor;
+            m_zoom = std::max(0.01, std::min(10000., m_zoom));
             m_offset = mousePos - (beforeScale * m_zoom) - QPointF(width() / 2., height() / 2.);
             update();
         }
     }
     event->accept();
 }
-
-
 
 void ImgView::leaveEvent(QEvent*){
     m_lastMousePos = QPoint(-1, -1);
@@ -212,13 +320,11 @@ void ImgView::resizeEvent(QResizeEvent* event){
     setMinimumHeight(height);
     setMinimumWidth(2 * height);
 
-    if (event) {
-        QWidget::resizeEvent(event);
-    }
+    QWidget::resizeEvent(event);
 }
 
 void ImgView::keyPressEvent(QKeyEvent* event){
-    if (event->key() == Qt::Key_PageDown || event->key() == Qt::Key_Right) {
+    if (event->key() == Qt::Key_PageDown || event->key() == Qt::Key_Right || event->key() == Qt::Key_Space) {
         nextImage(FileDir::next);
         event->accept();
     } else if (event->key() == Qt::Key_PageUp || event->key() == Qt::Key_Left) {
@@ -231,10 +337,9 @@ void ImgView::keyPressEvent(QKeyEvent* event){
 
 void ImgView::loadImage(QStringList filenames)
 {
-    QSettings settings("Adi", "ImgView");
-    QString selectedImage;
+    QSettings settings("ImgView", "ImgView");
 
-    //If we get no list of filenames, ask user
+    // If we get no list of filenames, ask user
     if (filenames.isEmpty()) {
         QString lastDir = settings.value("LastDirectory", "").toString();
         QString supported(QStringLiteral(u"Image Files ("));
@@ -242,105 +347,123 @@ void ImgView::loadImage(QStringList filenames)
             supported += "*." + s + ' ';
         }
         supported += ')';
-        selectedImage = QFileDialog::getOpenFileName(this, tr("Load Image File"), lastDir, supported);
-        if (!m_supported_extensions.contains(QFileInfo(selectedImage).suffix().toLower())) {
-            emit message(QStringLiteral(u"Not supported '%1'").arg(selectedImage));
+        filenames.push_back(QFileDialog::getOpenFileName(this, tr("Load Image File"), lastDir, supported));
+        if (filenames.isEmpty()) {
             return;
-        } 
-        filenames.push_back(selectedImage);
+        }
+        if (!m_supported_extensions.contains(QFileInfo(filenames.front()).suffix().toLower())) {
+            emit message(QStringLiteral(u"Not supported '%1'").arg(filenames.front()));
+            return;
+        }
+        settings.setValue("LastDirectory", QFileInfo(filenames.back()).absolutePath());
     }
 
-    if (filenames.size() == 1){
-        selectedImage = filenames.at(0);
-        filenames = QDir(QFileInfo(filenames.front()).absolutePath()).entryList(QDir::Files | QDir::NoSymLinks | QDir::Readable);
-        for (auto& f : filenames){
-            f = QFileInfo(selectedImage).absolutePath() + '/' + f;
-        }
+    getFiles(filenames, QDirIterator::Subdirectories);
+}
+void ImgView::getFiles(QStringList filenames, QDirIterator::IteratorFlag itf){
+    clearImages();
+    DirIteratorTask* dit = new DirIteratorTask(filenames, itf);
+    connect(dit, &DirIteratorTask::loadedFilenames, this, &ImgView::loadedFilenames);
+    QThreadPool::globalInstance()->start(dit);
+}
+
+void ImgView::openFolder(QString dir){
+    if (dir.isEmpty()) {
+        QSettings settings("ImgView", "ImgView");
+        QString lastDir = settings.value("LastDirectory", "").toString();
+        dir = QFileDialog::getExistingDirectory(this, QStringLiteral(u"Open Folder"), lastDir);
     }
 
-
-    //If he have filenames here, delete the internal data and create a new one
-    if (!filenames.isEmpty()) {
-        for (ImgStruct* img : m_allImages) {
-            if (img) {
-                img->mutex.lock();
-                delete img;
-            }
-        }
-        m_allImages.clear();
-
-        int idx = 0;
-        for (auto const& filename : filenames) {
-            QFileInfo const fileInfo(filename);
-            if (m_supported_extensions.contains(fileInfo.suffix().toLower())) {
-                settings.setValue("LastDirectory", fileInfo.absolutePath());
-                if (m_supported_extensions.contains(fileInfo.suffix().toLower())) {
-                    m_allImages.push_back(new ImgStruct);
-                    m_allImages.back()->fn = filename;
-                    m_allImages.back()->fi = fileInfo;
-                    m_allImages.back()->idx = idx++;
-                }
-            }
-        }
-
-        //Rotate that way, the selected image is the first one
-        if (!m_allImages.isEmpty() && !selectedImage.isEmpty()) {
-            QFileInfo const fileInfo(selectedImage);
-            while (m_allImages.front()->fi.absoluteFilePath().toLower() != fileInfo.absoluteFilePath().toLower()) {
-                m_allImages.append(m_allImages.takeFirst());
-            }
-        }
-        nextImage(ImgView::FileDir::none);
+    if (!dir.isEmpty()) {
+        getFiles(QStringList { dir }, QDirIterator::Subdirectories);
     }
 }
 
 void ImgView::loaded(size_t idx){
-    if (m_allImages.size() > idx){
-        if (m_allImages.first()->idx == idx){
-            setTitle();
+    if (m_imgstruct) {
+        if (idx == m_imgstruct->idx) {
             update();
+            setTitle();
         }
     }
 }
 
-void ImgView::nextImage(FileDir fd)
-{
+void ImgView::loadedFilenames(QList<ImgStruct*> is){
+    if (is.isEmpty()){
+        return;
+    }
+    if (m_allImages.isEmpty()) {
+        m_imgstruct = is.front();
+        update();
+    }
+    m_allImages.append(is);
+    nextImage(ImgView::FileDir::none);
+}
+
+int mapIdxToRange(int idx, int range){
+    if (idx < 0){
+        idx += range;
+    } else if (idx >= range) {
+        idx -= range;
+    }
+    return idx;
+}
+
+void ImgView::nextImage(FileDir fd){
+
     if (m_allImages.isEmpty()) {
         return;
     }
 
-    // Rotate list once
-    if (fd == FileDir::next) {
-        m_allImages.append(m_allImages.takeFirst());
-    } else if (fd == FileDir::previous) {
-        m_allImages.prepend(m_allImages.takeLast());
+    //Limit scroll rate
+    int const cores = QThread::idealThreadCount();
+    if (ImgLoaderTask::runningCount() >= cores){
+        qDebug() << "Scroll rate throttle!";
+        return;
     }
 
-    //If Image is loaded, set Titlebar
-    if (m_allImages.front()->mutex.tryLock()){
-        if (!m_allImages.front()->img.isNull()){
-            setTitle();
+    int nextidx = m_imgstruct->idx;
+    if (fd == FileDir::next) {
+        nextidx++;
+        if (nextidx >= m_allImages.size()) {
+            nextidx -= m_allImages.size();
         }
-        m_allImages.front()->mutex.unlock();
+    } else if (fd == FileDir::previous) {
+        nextidx--;
+        if (nextidx < 0) {
+            nextidx += m_allImages.size();
+        }
     }
+    m_imgstruct = m_allImages.at(nextidx);
+
+    //Set Title to new filename
+    setTitle();
 
     // Cache next Images
-    for (int i_ = -10; i_ <= 10; i_++) {
-        int i = i_;
-        if (i < 0){
-            i = m_allImages.size() + i;
-        }
-        if ((m_allImages.size() > i) && (i >= 0)) {
-            ImgStruct* is = m_allImages[i];
-            if (is->mutex.tryLock()) {
-                if (is->img.isNull()){
-                    is->visible = i == 0;
-                    ImgLoaderTask* ilt = new ImgLoaderTask(is);
-                    connect(ilt, &ImgLoaderTask::loaded, this, &ImgView::loaded);
-                    QThreadPool::globalInstance()->start(ilt);
+    int const current_image = m_imgstruct->idx;
+    for (int i_ = current_image - cores-1; i_<current_image + cores+1; i_++){
+        int const dist = std::abs(i_);
+        int const idx = (i_ >= 0);
+        ImgStruct* is = m_allImages.at(idx);
+        if (is->mutex.tryLock()) {
+            if (dist < cores) {
+                if (is->img.isNull()) {
+                    is->worktodo.insert(ImgStruct::loadImage);
                 }
-                is->mutex.unlock();
+                if (is->thumbnail.isNull()){
+                    is->worktodo.insert(ImgStruct::createThumbnail);
+                }
+            } else {
+                if (!is->img.isNull()) {    
+                    is->worktodo.insert(ImgStruct::destroyImage);
+                }
             }
+            if (!is->worktodo.isEmpty()){
+                ImgLoaderTask* ilt = new ImgLoaderTask(is);
+                connect(ilt, &ImgLoaderTask::loaded, this, &ImgView::loaded);
+                QThreadPool::globalInstance()->start(ilt);
+            }
+            is->mutex.unlock();
         }
     }
 
@@ -348,14 +471,31 @@ void ImgView::nextImage(FileDir fd)
 }
 
 void ImgView::setTitle(){
-    ImgStruct const& is = *m_allImages.first();
-    emit message(QStringLiteral(u"%1 (%2/%3) (%4x%5 %6kB)")
-            .arg(is.fi.absoluteFilePath())
-            .arg(is.idx + 1)
-            .arg(m_allImages.size())
-            .arg(is.img.width())
-            .arg(is.img.height())
-            .arg(is.fi.size() / (1024)));
+    if (m_imgstruct) {
+        if (m_imgstruct->mutex.tryLock()) {
+            ImgStruct const& is = *m_imgstruct;
+            emit message(QStringLiteral(u"%1 %2 (%3/%4) (%5x%6 %7kB)")
+                    .arg(is.fi.fileName())
+                    .arg(is.fi.absoluteFilePath())
+                    .arg(is.idx + 1)
+                    .arg(m_allImages.size())
+                    .arg(is.img.width())
+                    .arg(is.img.height())
+                    .arg(is.fi.size() / (1024)));
+            m_imgstruct->mutex.unlock();
+        }
+    }
+}
+
+void ImgView::clearImages(){
+    QtConcurrent::blockingMap(m_allImages, [](ImgStruct* img) {
+        if (img) {
+            img->mutex.lock();
+            delete img;
+        }
+    });
+    m_allImages.clear();
+    m_imgstruct = 0;
 }
 
 void ImgView::customContextMenu(QPoint pos){
