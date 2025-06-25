@@ -16,6 +16,7 @@ struct ImgStruct {
     QString fn;
     QFileInfo fi;
     QPixmap img, thumbnail;
+    QSize size;
     QString errormessage;
     QMutex mutex;
     enum WorkToDo { loadImage, createThumbnail, destroyImage};
@@ -95,7 +96,7 @@ private:
     static inline QSet<QString> m_supported_extensions;
     QList<ImgStruct*> m_allImages;
     QMutex m_allImage_mutex;
-    ImgStruct* m_imgstruct;
+    ImgStruct* m_imgstruct = 0;
     QVector<QPushButton*> m_buttons;
     QPoint m_lastMousePos;
     QPointF m_offset;
