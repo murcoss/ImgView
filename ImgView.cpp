@@ -14,6 +14,8 @@
 #include "IconEngine.h"
 
 void ImgLoaderTask::run(){
+    QElapsedTimer ti;
+    ti.start();
     if (imgStruct) {
         imgStruct->mutex.lock();
         QSet<ImgStruct::WorkToDo> worktodo = imgStruct->worktodo;
@@ -39,18 +41,22 @@ void ImgLoaderTask::run(){
             }
         }
         if (worktodo.contains(ImgStruct::WorkToDo::createThumbnail)) {
-            img.scaled(QSize(256, 256), Qt::KeepAspectRatio);
-            QPixmap px = QPixmap::fromImage(img);
+            QImage const scaled = img.scaled(QSize(256, 256), Qt::KeepAspectRatio);
+            QPixmap px = QPixmap::fromImage(scaled);
             QMutexLocker locker(&imgStruct->mutex);
             imgStruct->thumbnail = std::move(px);
         }
         if (imgStruct->worktodo.contains(ImgStruct::WorkToDo::destroyImage)) {
             QMutexLocker locker(&imgStruct->mutex);
-            imgStruct->img = std::move(QPixmap());
+            if (!imgStruct->img.isDetached()) {
+                qDebug() << "pixmap about to be clear has still references!";
+            }
+            QPixmap().swap(imgStruct->img);
         }
         QMutexLocker locker(&imgStruct->mutex);
         imgStruct->worktodo.clear();
     }
+    qDebug() << "ImgLoaderTask: " << ti.elapsed() << "ms";
 }
 
 void DirIteratorTask::run(){
@@ -238,10 +244,6 @@ void ImgView::paintEvent(QPaintEvent*){
     QPointF const topLeft((width() - scaledSize.width()) / 2.0,(height() - scaledSize.height()) / 2.0);
     QRectF const targetRect(topLeft, scaledSize);
     p.drawPixmap(targetRect, img, QRectF(QPointF(0, 0), img.size()));
-
-    if (showThumb){
-        p.drawLine(targetRect.topLeft(), targetRect.bottomRight());
-    }
 
     qDebug() << "Paintevent time: " << timer.nsecsElapsed() / 1000;
 }
