@@ -7,7 +7,6 @@
 #include <QMimeData>
 #include <QDirIterator>
 #include <QInputDialog>
-#include <QSvgRenderer>
 #include <QtConcurrent>
 
 #include "ImgView.h"
@@ -199,6 +198,9 @@ ImgView::ImgView(QWidget* parent)
     }
     if (m_supported_extensions.contains("svg")){
         m_supported_extensions.remove("svg");
+    }
+    if (m_supported_extensions.contains("ico")) {
+        m_supported_extensions.remove("ico");
     }
 };
 

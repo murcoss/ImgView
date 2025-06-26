@@ -1,6 +1,5 @@
 #pragma once
 #include <QIconEngine>
-#include <QSvgGenerator>
 #include <QPainter>
 
 class IconEngine : public QIconEngine {
