@@ -235,11 +235,11 @@ void ImgView::paintEvent(QPaintEvent*){
 
     QPixmap const& img = showThumb ? i.thumbnail : i.img;
 
-    p.translate(m_offset);
-    QPoint const center = QPoint(width() / 2, height() / 2);
-    p.translate(center);
-    p.scale(m_zoom, m_zoom);
-    p.translate(-center);
+    p.setTransform(m_transform);
+
+    QSize si = size();
+    qreal dpr = devicePixelRatioF();
+    qreal dprs = devicePixelRatioFScale();
 
     QSize const scaledSize = i.size.scaled(size(), Qt::KeepAspectRatio);
 
@@ -257,6 +257,7 @@ void ImgView::mouseDoubleClickEvent(QMouseEvent*){
 void ImgView::autofit(){
     m_zoom = 1.;
     m_offset = { 0, 0 };
+    setTransform();
     update();
 }
 
@@ -270,6 +271,7 @@ void ImgView::mouseMoveEvent(QMouseEvent* event){
         QPoint const delta = event->pos() - m_lastMousePos;
         m_offset += delta;
         m_lastMousePos = event->pos();
+        setTransform();
         update();
     }
     QWidget::mouseMoveEvent(event);
@@ -294,6 +296,7 @@ void ImgView::wheelEvent(QWheelEvent* event) {
             m_zoom *= factor;
             m_zoom = std::max(0.01, std::min(10000., m_zoom));
             m_offset = mousePos - (beforeScale * m_zoom) - QPointF(width() / 2., height() / 2.);
+            setTransform();
             update();
         }
     }
@@ -321,6 +324,8 @@ void ImgView::resizeEvent(QResizeEvent* event){
     }
     setMinimumHeight(height);
     setMinimumWidth(2 * height);
+
+    setTransform();
 
     QWidget::resizeEvent(event);
 }
@@ -504,6 +509,14 @@ void ImgView::clearImages(){
     });
     m_allImages.clear();
     m_imgstruct = 0;
+}
+
+void ImgView::setTransform(){
+    m_transform.reset();
+    QPoint const center(width() / 2, height() / 2);
+    m_transform.translate(m_offset.x() + center.x(), m_offset.y() + center.y());
+    m_transform.scale(m_zoom, m_zoom);
+    m_transform.translate(-center.x(), -center.y());
 }
 
 void ImgView::customContextMenu(QPoint pos){

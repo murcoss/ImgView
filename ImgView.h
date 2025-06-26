@@ -92,6 +92,7 @@ private:
     void nextImage(FileDir fd);
     void setTitle();
     void clearImages();
+    void setTransform();
 
     static inline QSet<QString> m_supported_extensions;
     QList<ImgStruct*> m_allImages;
@@ -102,6 +103,7 @@ private:
     QPointF m_offset;
     QPoint m_pressed;
     double m_zoom = 1.;
+    QTransform m_transform;
     bool m_show_overlay = false;
     bool m_show_text = false;
     bool m_wheel_zoom = true;
