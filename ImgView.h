@@ -19,6 +19,7 @@ struct ImgStruct {
     QSize size;
     QString errormessage;
     QMutex mutex;
+    QPoint grid_idx;
     enum WorkToDo { loadImage, createThumbnail, destroyImage};
     QSet<WorkToDo> worktodo;
 };

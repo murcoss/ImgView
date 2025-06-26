@@ -40,8 +40,15 @@ void ImgLoaderTask::run(){
             }
         }
         if (worktodo.contains(ImgStruct::WorkToDo::createThumbnail)) {
-            QImage const scaled = img.scaled(QSize(256, 256), Qt::KeepAspectRatio);
-            QPixmap px = QPixmap::fromImage(scaled);
+            int constexpr maxsize = 256;
+            int const imgsize = std::max(img.width(), img.height());
+            QPixmap px;
+            if (imgsize < maxsize) {
+                px = QPixmap::fromImage(img);
+            } else {
+                QImage const scaled = img.scaled(QSize(maxsize, maxsize), Qt::KeepAspectRatio);
+                px = QPixmap::fromImage(scaled);
+            }
             QMutexLocker locker(&imgStruct->mutex);
             imgStruct->thumbnail = std::move(px);
         }
@@ -406,6 +413,19 @@ void ImgView::loadedFilenames(QList<ImgStruct*> is){
         update();
     }
     m_allImages.append(is);
+
+    //Calculate Position in grid
+    int const dim = std::ceil(std::sqrt(m_allImages.size()));
+    int x = 0, y = 0;
+    for (auto& i : m_allImages){
+        i->grid_idx = QPoint(x, y);
+        x++;
+        if (x >= dim){
+            x = 0;
+            y++;
+        }
+    }
+
     nextImage(ImgView::FileDir::none);
 }
 
