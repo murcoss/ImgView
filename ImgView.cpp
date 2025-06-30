@@ -578,6 +578,11 @@ void ImgView::clearImages(){
     m_imgstruct = 0;
 }
 
+void ImgView::closeEvent(QCloseEvent* event){
+    QThreadPool::globalInstance()->waitForDone();
+    event->accept();
+}
+
 void ImgView::setTransform(){
     m_transform.reset();
     QPoint const center(width() / 2, height() / 2);
