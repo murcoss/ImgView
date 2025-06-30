@@ -245,12 +245,12 @@ void ImgView::paintEvent(QPaintEvent*){
     QMutexLocker locker(&i.mutex);
     bool showThumb = false;
     if (i.img.isNull()) {
-        showThumb = true;
         if (i.thumbnail.isNull()) {
             QString const err = i.errormessage.isEmpty() ? QStringLiteral(u"Loading...") : i.errormessage;
             p.drawText(rect(), Qt::AlignCenter, err);
             return;
         }
+        showThumb = true;
     }
 
     QPixmap const& img = showThumb ? i.thumbnail : i.img;
@@ -267,7 +267,12 @@ void ImgView::paintEvent(QPaintEvent*){
     QRectF const targetRect(topLeft, scaledSize);
     p.drawPixmap(targetRect, img, QRectF(QPointF(0, 0), img.size()));
 
-    qDebug() << "Paintevent time: " << timer.nsecsElapsed() / 1000;
+
+    for (auto const& is : m_allImages){
+        p.drawPixmap(is->grid_rect, is->thumbnail, QRectF(QPointF(0, 0), is->thumbnail.size()));
+    }
+
+    qDebug() << "Paintevent time us: " << timer.nsecsElapsed() / 1000;
 }
 
 void ImgView::mouseDoubleClickEvent(QMouseEvent*){
@@ -406,17 +411,28 @@ void ImgView::openFolder(QString dir){
     }
 }
 
-void ImgView::loaded(ImgStruct::WorkResult wr, size_t idx){
-    if (wr == ImgStruct::WorkResult::loadedImage) { 
+void ImgView::loaded(ImgStruct::WorkResult wr, size_t idx)
+{
     if (m_imgstruct) {
+        if (wr == ImgStruct::WorkResult::loadedImage) {
             if (idx == m_imgstruct->idx) {
                 update();
                 setTitle();
             }
+        } else if (wr == ImgStruct::WorkResult::loadedThumb) {
+            if (m_allImages.size() > idx) {
+                ImgStruct & is = *m_allImages.at(idx);
+                m_thumbcount++;
+
+                QSizeF const scaledSize = is.size.scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
+                QPointF const topLeft((1. - scaledSize.width()) / 2.0 + is.grid_idx.x(), (1. - scaledSize.height()) / 2.0 + is.grid_idx.y());
+                QRectF const targetRect(topLeft, scaledSize);
+    
+                is.grid_rect = targetRect;
+            }
         }
-    } else if (wr == ImgStruct::WorkResult::loadedThumb) {
-        m_thumbcount++;
     }
+
     //Check if we have to load other files
     nextImage(ImgView::FileDir::none);
 }
@@ -437,8 +453,6 @@ void ImgView::loadedFilenames(QList<ImgStruct*> is){
     int x = 0, y = 0;
     for (auto& i : m_allImages){
         i->grid_idx = QPoint(x, y);
-        QSizeF const scaledSize = i->size.scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
-        i->grid_rect = QRectF(QPointF(x, y), scaledSize);
         x++;
         if (x >= dim){
             x = 0;
