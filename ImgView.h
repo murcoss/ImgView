@@ -16,13 +16,15 @@ struct ImgStruct {
     QString fn;
     QFileInfo fi;
     QPixmap img, thumbnail;
-    QSize size;
+    QSizeF size;
     QString errormessage;
     QMutex mutex;
     QPoint grid_idx;
     QRectF grid_rect;
-    enum WorkToDo { loadImage, createThumbnail, destroyImage};
+    enum class WorkToDo { loadImage, createThumbnail, destroyImage};
+    enum class WorkResult { none, loadedImage, loadedThumb, destroyedImage };
     QSet<WorkToDo> worktodo;
+    bool load_thumbnail = false;
     bool thumbnail_loaded = false;
 };
 
@@ -50,7 +52,7 @@ public:
     void run() override;
 
 signals:
-    void loaded(size_t idx);
+    void loaded(ImgStruct::WorkResult wr, size_t idx);
 };
 
 
@@ -66,7 +68,7 @@ public:
     void autofit();
     void loadImage(QStringList filename);
     void openFolder(QString dir);
-    void loaded(size_t idx);
+    void loaded(ImgStruct::WorkResult wr, size_t idx);
     void loadedFilenames(QList<ImgStruct*> is);
     static QSet<QString> const& supportedExtensions(){
         return m_supported_extensions;
@@ -111,6 +113,7 @@ private:
     bool m_show_text = false;
     bool m_wheel_zoom = true;
     bool m_show_thumb = false;
+    int m_thumbcount = 0;
 };
 
 class DirIteratorTask : public QObject, public QRunnable {

@@ -21,10 +21,6 @@ void ImgLoaderTask::run(){
         QFileInfo const fi = imgStruct->fi;
         imgStruct->mutex.unlock();
         QImage img;
-        if (worktodo.contains(ImgStruct::WorkToDo::createThumbnail) && !worktodo.contains(ImgStruct::WorkToDo::loadImage)) {
-            worktodo.insert(ImgStruct::WorkToDo::loadImage);
-            worktodo.insert(ImgStruct::WorkToDo::destroyImage);
-        }
         if (worktodo.contains(ImgStruct::WorkToDo::loadImage)) {
             worktodo.insert(ImgStruct::WorkToDo::createThumbnail);
             QImageReader reader(fi.absoluteFilePath());
@@ -34,23 +30,38 @@ void ImgLoaderTask::run(){
             if (readok) {
                 imgStruct->img = std::move(QPixmap::fromImage(img));
                 imgStruct->size = img.size();
-                emit loaded(imgStruct->idx);
             } else {
                 imgStruct->errormessage = reader.errorString();
             }
         }
         if (worktodo.contains(ImgStruct::WorkToDo::createThumbnail)) {
-            int constexpr maxsize = 256;
-            int const imgsize = std::max(img.width(), img.height());
-            QPixmap px;
-            if (imgsize < maxsize) {
-                px = QPixmap::fromImage(img);
-            } else {
-                QImage const scaled = img.scaled(QSize(maxsize, maxsize), Qt::KeepAspectRatio);
-                px = QPixmap::fromImage(scaled);
+            if (img.isNull()){
+                QImageReader reader(fi.absoluteFilePath());
+
+                bool const readok = reader.read(&img);
+                if (!readok) {
+                    QMutexLocker locker(&imgStruct->mutex);
+                    imgStruct->errormessage = reader.errorString();
+                }
+                emit loaded(ImgStruct::WorkResult::loadedImage, imgStruct->idx);
             }
-            QMutexLocker locker(&imgStruct->mutex);
-            imgStruct->thumbnail = std::move(px);
+            if (!img.isNull()) {
+                qDebug() << "Loaded thumb idx " << imgStruct->idx;
+                int const constexpr maxsize = 256;
+                int const imgsize = std::max(img.width(), img.height());
+                QPixmap px;
+                if (imgsize < maxsize) {
+                    px = QPixmap::fromImage(img);
+                } else {
+                    QImage const scaled = img.scaled(QSize(maxsize, maxsize), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                    px = QPixmap::fromImage(scaled);
+                }
+                QMutexLocker locker(&imgStruct->mutex);
+                imgStruct->thumbnail = std::move(px);
+                imgStruct->size = img.size();
+
+                emit loaded(ImgStruct::WorkResult::loadedThumb, imgStruct->idx);
+            }
         }
         if (imgStruct->worktodo.contains(ImgStruct::WorkToDo::destroyImage)) {
             QMutexLocker locker(&imgStruct->mutex);
@@ -58,9 +69,11 @@ void ImgLoaderTask::run(){
                 qDebug() << "pixmap about to be clear has still references!";
             }
             QPixmap().swap(imgStruct->img);
+            emit loaded(ImgStruct::WorkResult::destroyedImage, imgStruct->idx);
         }
         QMutexLocker locker(&imgStruct->mutex);
         imgStruct->worktodo.clear();
+        locker.unlock();
     }
     qDebug() << "ImgLoaderTask: " << ti.elapsed() << "ms";
 }
@@ -393,12 +406,16 @@ void ImgView::openFolder(QString dir){
     }
 }
 
-void ImgView::loaded(size_t idx){
+void ImgView::loaded(ImgStruct::WorkResult wr, size_t idx){
+    if (wr == ImgStruct::WorkResult::loadedImage) { 
     if (m_imgstruct) {
-        if (idx == m_imgstruct->idx) {
-            update();
-            setTitle();
+            if (idx == m_imgstruct->idx) {
+                update();
+                setTitle();
+            }
         }
+    } else if (wr == ImgStruct::WorkResult::loadedThumb) {
+        m_thumbcount++;
     }
     //Check if we have to load other files
     nextImage(ImgView::FileDir::none);
@@ -415,6 +432,7 @@ void ImgView::loadedFilenames(QList<ImgStruct*> is){
     m_allImages.append(is);
 
     //Calculate Position in grid
+    m_thumbcount = 0;
     int const dim = std::ceil(std::sqrt(m_allImages.size()));
     int x = 0, y = 0;
     for (auto& i : m_allImages){
@@ -425,6 +443,9 @@ void ImgView::loadedFilenames(QList<ImgStruct*> is){
         if (x >= dim){
             x = 0;
             y++;
+        }
+        if (i->thumbnail_loaded){
+            m_thumbcount++;
         }
     }
 
@@ -492,12 +513,12 @@ void ImgView::nextImage(FileDir fd){
                     dist = std::min(dist, (int)m_allImages.size() - dist);
                     if (dist < cores) {
                         if (is->img.isNull()) {
-                            is->worktodo.insert(ImgStruct::loadImage);
+                            is->worktodo.insert(ImgStruct::WorkToDo::loadImage);
                             qDebug() << "Load " << is->idx << " (" << ImgLoaderTask::runningCount() << ")";
                         }
                     } else {
                         if (!is->img.isNull()) {
-                            is->worktodo.insert(ImgStruct::destroyImage);
+                            is->worktodo.insert(ImgStruct::WorkToDo::destroyImage);
                         }
                     }
                     if (!is->worktodo.isEmpty()) {
@@ -513,10 +534,10 @@ void ImgView::nextImage(FileDir fd){
 
     if (ImgLoaderTask::runningCount() < cores) {
         for (auto const& is : m_allImages){
-            if (!is->thumbnail_loaded){
+            if (!is->load_thumbnail){
                 if (is->mutex.tryLock()) {
-                    is->thumbnail_loaded = true;
-                    is->worktodo.insert(ImgStruct::createThumbnail);
+                    is->load_thumbnail = true;
+                    is->worktodo.insert(ImgStruct::WorkToDo::createThumbnail);
                     ImgLoaderTask* ilt = new ImgLoaderTask(is);
                     connect(ilt, &ImgLoaderTask::loaded, this, &ImgView::loaded);
                     QThreadPool::globalInstance()->start(ilt);
@@ -534,10 +555,11 @@ void ImgView::nextImage(FileDir fd){
 void ImgView::setTitle(){
     if (m_imgstruct) {
         ImgStruct & is = *m_imgstruct;
-        emit message(QStringLiteral(u"%1 %2 (%3/%4) (%5x%6 %7kB)")
+        emit message(QStringLiteral(u"%1 %2 (%3/%4/%5) (%6x%7 %8kB)")
                 .arg(is.fi.fileName())
                 .arg(is.fi.absoluteFilePath())
                 .arg(is.idx + 1)
+                .arg(m_thumbcount)
                 .arg(m_allImages.size())
                 .arg(is.size.width())
                 .arg(is.size.height())
