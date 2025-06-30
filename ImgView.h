@@ -20,8 +20,10 @@ struct ImgStruct {
     QString errormessage;
     QMutex mutex;
     QPoint grid_idx;
+    QRectF grid_rect;
     enum WorkToDo { loadImage, createThumbnail, destroyImage};
     QSet<WorkToDo> worktodo;
+    bool thumbnail_loaded = false;
 };
 
 class ImgLoaderTask : public QObject, public QRunnable {

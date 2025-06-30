@@ -248,7 +248,7 @@ void ImgView::paintEvent(QPaintEvent*){
     qreal dpr = devicePixelRatioF();
     qreal dprs = devicePixelRatioFScale();
 
-    QSize const scaledSize = i.size.scaled(size(), Qt::KeepAspectRatio);
+    QSizeF const scaledSize = i.size.scaled(size(), Qt::KeepAspectRatio);
 
     QPointF const topLeft((width() - scaledSize.width()) / 2.0,(height() - scaledSize.height()) / 2.0);
     QRectF const targetRect(topLeft, scaledSize);
@@ -419,6 +419,8 @@ void ImgView::loadedFilenames(QList<ImgStruct*> is){
     int x = 0, y = 0;
     for (auto& i : m_allImages){
         i->grid_idx = QPoint(x, y);
+        QSizeF const scaledSize = i->size.scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
+        i->grid_rect = QRectF(QPointF(x, y), scaledSize);
         x++;
         if (x >= dim){
             x = 0;
@@ -444,20 +446,24 @@ void ImgView::nextImage(FileDir fd){
         return;
     }
 
-    int nextidx = m_imgstruct->idx;
-    if (fd == FileDir::next) {
-        nextidx++;
-        if (nextidx >= m_allImages.size()) {
-            nextidx -= m_allImages.size();
+    if (fd != FileDir::none) {
+        int nextidx = m_imgstruct->idx;
+        if (fd == FileDir::next) {
+            nextidx++;
+            if (nextidx >= m_allImages.size()) {
+                nextidx -= m_allImages.size();
+            }
+        } else if (fd == FileDir::previous) {
+            nextidx--;
+            if (nextidx < 0) {
+                nextidx += m_allImages.size();
+            }
         }
-    } else if (fd == FileDir::previous) {
-        nextidx--;
-        if (nextidx < 0) {
-            nextidx += m_allImages.size();
-        }
+        m_imgstruct = m_allImages.at(nextidx);
+        autofit();
+    } else {
+        update();
     }
-    m_imgstruct = m_allImages.at(nextidx);
-    autofit();
 
     //Set Title to new filename
     setTitle();
@@ -504,6 +510,25 @@ void ImgView::nextImage(FileDir fd){
             }
         }
     }
+
+    if (ImgLoaderTask::runningCount() < cores) {
+        for (auto const& is : m_allImages){
+            if (!is->thumbnail_loaded){
+                if (is->mutex.tryLock()) {
+                    is->thumbnail_loaded = true;
+                    is->worktodo.insert(ImgStruct::createThumbnail);
+                    ImgLoaderTask* ilt = new ImgLoaderTask(is);
+                    connect(ilt, &ImgLoaderTask::loaded, this, &ImgView::loaded);
+                    QThreadPool::globalInstance()->start(ilt);
+                    is->mutex.unlock();
+                    if (ImgLoaderTask::runningCount() >= cores) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 void ImgView::setTitle(){
