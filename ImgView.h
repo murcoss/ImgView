@@ -11,16 +11,17 @@
 #include <QDropEvent>
 #include <QDirIterator>
 
+#include "ImageHashStore.h"
+
 struct ImgStruct {
     int idx;
     QString fn;
     QFileInfo fi;
     QPixmap img, thumbnail;
-    QSizeF size;
+    QSizeF size, thumbsize;
     QString errormessage;
     QMutex mutex;
     QPoint grid_idx;
-    QRectF grid_rect;
     enum class WorkToDo { loadImage, createThumbnail, destroyImage};
     enum class WorkResult { none, loadedImage, loadedThumb, destroyedImage };
     QSet<WorkToDo> worktodo;
@@ -32,6 +33,7 @@ class ImgLoaderTask : public QObject, public QRunnable {
     Q_OBJECT
 public:
     ImgStruct* imgStruct;
+    static inline ImageHashStore * m_imagehashstore = nullptr;
     static inline QMutex m_mutex;
     static inline QSet<ImgLoaderTask*> m_running;
 
@@ -39,6 +41,9 @@ public:
         QMutexLocker locker(&m_mutex);
         setAutoDelete(true);
         m_running.insert(this);
+        if (!m_imagehashstore){
+            m_imagehashstore = new ImageHashStore;
+        }
     }
     ~ImgLoaderTask(){
         QMutexLocker locker(&m_mutex);

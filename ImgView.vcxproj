@@ -18,11 +18,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="IconEngine.cpp" />
+    <ClCompile Include="ImageHashStore.cpp" />
     <ClCompile Include="ImgView.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="IconEngine.h" />
+    <ClInclude Include="ImageHashStore.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
@@ -58,12 +60,12 @@
   </ImportGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="QtSettings">
     <QtInstall>$(DefaultQtVersion)</QtInstall>
-    <QtModules>core;gui;widgets;concurrent;svg</QtModules>
+    <QtModules>core;gui;widgets;concurrent;sql</QtModules>
     <QtBuildConfig>debug</QtBuildConfig>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="QtSettings">
     <QtInstall>$(DefaultQtVersion)</QtInstall>
-    <QtModules>core;gui;widgets;concurrent;svg</QtModules>
+    <QtModules>core;gui;widgets;concurrent;sql</QtModules>
     <QtBuildConfig>release</QtBuildConfig>
   </PropertyGroup>
   <Target Name="QtMsBuildNotFound" BeforeTargets="CustomBuild;ClCompile" Condition="!Exists('$(QtMsBuild)\qt.targets') or !Exists('$(QtMsBuild)\qt.props')">

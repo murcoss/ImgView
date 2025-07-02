@@ -12,19 +12,39 @@
 #include "ImgView.h"
 #include "IconEngine.h"
 
+bool readImageData(QByteArray& imageData, QString filename){
+    QFile file(filename);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return false;
+    } else {
+        imageData = file.readAll();
+        file.close();
+        return true;
+    }
+}
+
 void ImgLoaderTask::run(){
     QElapsedTimer ti;
     ti.start();
-    if (imgStruct) {
-        imgStruct->mutex.lock();
-        QSet<ImgStruct::WorkToDo> worktodo = imgStruct->worktodo;
-        QFileInfo const fi = imgStruct->fi;
-        imgStruct->mutex.unlock();
-        QImage img;
-        if (worktodo.contains(ImgStruct::WorkToDo::loadImage)) {
-            worktodo.insert(ImgStruct::WorkToDo::createThumbnail);
-            QImageReader reader(fi.absoluteFilePath());
-            
+
+    if (!imgStruct) {
+        return;
+    }
+
+    imgStruct->mutex.lock();
+    QSet<ImgStruct::WorkToDo> worktodo = imgStruct->worktodo;
+    QFileInfo const fi = imgStruct->fi;
+    imgStruct->mutex.unlock();
+
+    QImage img;
+    QByteArray imageData;
+    if (worktodo.contains(ImgStruct::WorkToDo::loadImage)) {
+        worktodo.insert(ImgStruct::WorkToDo::createThumbnail);
+
+        if(readImageData(imageData, fi.absoluteFilePath())){
+            QBuffer buffer(&imageData);
+            buffer.open(QIODevice::ReadOnly);
+            QImageReader reader(&buffer);
             bool const readok = reader.read(&img);
             QMutexLocker locker(&imgStruct->mutex);
             if (readok) {
@@ -33,10 +53,27 @@ void ImgLoaderTask::run(){
             } else {
                 imgStruct->errormessage = reader.errorString();
             }
+        } else {
+            QMutexLocker locker(&imgStruct->mutex);
+            imgStruct->errormessage = QStringLiteral(u"Can't read file");
+            return;
         }
-        if (worktodo.contains(ImgStruct::WorkToDo::createThumbnail)) {
-            if (img.isNull()){
-                QImageReader reader(fi.absoluteFilePath());
+    }
+    if (worktodo.contains(ImgStruct::WorkToDo::createThumbnail)) {
+        QImage thumb;
+        QByteArray hash;
+        if (imageData.isEmpty()){
+            if (readImageData(imageData, fi.absoluteFilePath())) {
+                hash = ImageHashStore::calculateHash(imageData);
+                thumb = m_imagehashstore->get(hash);
+            }
+        }
+        if (thumb.isNull()) {
+            if (img.isNull()) {
+                QBuffer buffer(&imageData);
+                buffer.open(QIODevice::ReadOnly);
+
+                QImageReader reader(&buffer);
 
                 bool const readok = reader.read(&img);
                 if (!readok) {
@@ -46,35 +83,41 @@ void ImgLoaderTask::run(){
                 emit loaded(ImgStruct::WorkResult::loadedImage, imgStruct->idx);
             }
             if (!img.isNull()) {
+                QByteArray const hash = ImageHashStore::calculateHash(imageData);
                 qDebug() << "Loaded thumb idx " << imgStruct->idx;
                 int const constexpr maxsize = 256;
                 int const imgsize = std::max(img.width(), img.height());
-                QPixmap px;
                 if (imgsize < maxsize) {
-                    px = QPixmap::fromImage(img);
+                    thumb = img;
                 } else {
-                    QImage const scaled = img.scaled(QSize(maxsize, maxsize), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                    px = QPixmap::fromImage(scaled);
+                    thumb = img.scaled(QSize(maxsize, maxsize), Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 }
-                QMutexLocker locker(&imgStruct->mutex);
-                imgStruct->thumbnail = std::move(px);
-                imgStruct->size = img.size();
-
-                emit loaded(ImgStruct::WorkResult::loadedThumb, imgStruct->idx);
+                m_imagehashstore->insert(thumb, hash);
             }
         }
-        if (imgStruct->worktodo.contains(ImgStruct::WorkToDo::destroyImage)) {
+        if (!thumb.isNull()){
             QMutexLocker locker(&imgStruct->mutex);
-            if (!imgStruct->img.isDetached()) {
-                qDebug() << "pixmap about to be clear has still references!";
+            imgStruct->thumbnail = QPixmap::fromImage(thumb);
+            imgStruct->size = img.size();
+            if (imgStruct->size.width() > 0) {
+                imgStruct->thumbsize = imgStruct->size.scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
+            } else {
+                imgStruct->thumbsize = thumb.size().toSizeF().scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
             }
-            QPixmap().swap(imgStruct->img);
-            emit loaded(ImgStruct::WorkResult::destroyedImage, imgStruct->idx);
+            emit loaded(ImgStruct::WorkResult::loadedThumb, imgStruct->idx);
         }
-        QMutexLocker locker(&imgStruct->mutex);
-        imgStruct->worktodo.clear();
-        locker.unlock();
     }
+    if (imgStruct->worktodo.contains(ImgStruct::WorkToDo::destroyImage)) {
+        QMutexLocker locker(&imgStruct->mutex);
+        if (!imgStruct->img.isDetached()) {
+            qDebug() << "pixmap about to be clear has still references!";
+        }
+        QPixmap().swap(imgStruct->img);
+        emit loaded(ImgStruct::WorkResult::destroyedImage, imgStruct->idx);
+    }
+    QMutexLocker locker(&imgStruct->mutex);
+    imgStruct->worktodo.clear();
+    locker.unlock();
     qDebug() << "ImgLoaderTask: " << ti.elapsed() << "ms";
 }
 
@@ -269,7 +312,9 @@ void ImgView::paintEvent(QPaintEvent*){
 
 
     for (auto const& is : m_allImages){
-        p.drawPixmap(is->grid_rect, is->thumbnail, QRectF(QPointF(0, 0), is->thumbnail.size()));
+        QPointF const topLeft((1. - is->thumbsize.width()) / 2.0 + is->grid_idx.x(), (1. - is->thumbsize.height()) / 2.0 + is->grid_idx.y());
+        QRectF const targetRect(topLeft, is->thumbsize);
+        p.drawPixmap(targetRect, is->thumbnail, QRectF(QPointF(0, 0), is->thumbnail.size()));
     }
 
     qDebug() << "Paintevent time us: " << timer.nsecsElapsed() / 1000;
@@ -423,12 +468,6 @@ void ImgView::loaded(ImgStruct::WorkResult wr, size_t idx)
             if (m_allImages.size() > idx) {
                 ImgStruct & is = *m_allImages.at(idx);
                 m_thumbcount++;
-
-                QSizeF const scaledSize = is.size.scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
-                QPointF const topLeft((1. - scaledSize.width()) / 2.0 + is.grid_idx.x(), (1. - scaledSize.height()) / 2.0 + is.grid_idx.y());
-                QRectF const targetRect(topLeft, scaledSize);
-    
-                is.grid_rect = targetRect;
             }
         }
     }
@@ -542,6 +581,9 @@ void ImgView::nextImage(FileDir fd){
                     }
                 }
                 is->mutex.unlock();
+                if (ImgLoaderTask::runningCount() > 0){
+                    break;
+                }
             }
         }
     }

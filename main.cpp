@@ -7,7 +7,7 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     app.setStyle(QStyleFactory::create(QStringLiteral(u"Fusion")));
 
-    QCoreApplication::setOrganizationName(QStringLiteral("Adi"));
+    QCoreApplication::setOrganizationName(QStringLiteral("ImgView"));
     QCoreApplication::setApplicationName(QStringLiteral("ImgView"));
     QImageReader::setAllocationLimit(1024 * 1024 * 1024);
 
