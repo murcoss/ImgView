@@ -1,11 +1,11 @@
 #pragma once
-
 #include <QByteArray>
 #include <QCryptographicHash>
 #include <QImage>
 #include <QSqlDatabase>
 #include <QBuffer>
 #include <QMutex>
+#include <QSqlQuery>
 
 class ImageHashStore {
 public:
@@ -17,8 +17,7 @@ public:
     static QByteArray calculateHash(QByteArray const& image);
 
 private:
-    void initializeTable();
-
     QSqlDatabase db;
     QMutex lock;
+    QSqlQuery m_insert_query, m_get_query;
 };
