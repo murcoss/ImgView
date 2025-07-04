@@ -185,6 +185,8 @@ ImgView::ImgView(QWidget* parent)
     setContextMenuPolicy(Qt::CustomContextMenu);
     setAcceptDrops(true);
 
+    QSettings settings("ImgView", "ImgView");
+
     connect(this, &ImgView::customContextMenuRequested, this, &ImgView::customContextMenu);
 
     QPushButton* btnLoad = new QPushButton("📂", this);
@@ -204,6 +206,20 @@ ImgView::ImgView(QWidget* parent)
     connect(btnOpen, &QPushButton::clicked, [this]() {
         openFolder(QString());
     });
+
+    m_antialiase = settings.value("Wheel zoom").toBool();
+    QPushButton* btnSmooth = new QPushButton(m_antialiase ? QStringLiteral(u"🌀") : QStringLiteral(u"░"), this);
+    btnSmooth->setToolTip(QStringLiteral(u"Autofit"));
+    btnSmooth->setFixedSize(24, 24);
+    btnSmooth->raise();
+    m_buttons.push_back(btnSmooth);
+    connect(btnSmooth, &QPushButton::clicked, [this, btnSmooth]() {
+        m_antialiase = !m_antialiase;
+        btnSmooth->setText(m_antialiase ? QStringLiteral(u"🌀") : QStringLiteral(u"░"));
+        QSettings settings("ImgView", "ImgView");
+        settings.setValue("Antialiase", m_antialiase);
+        update();
+        });
 
     QPushButton* btnFit = new QPushButton("⤢", this);
     btnFit->setToolTip(QStringLiteral(u"Autofit"));
@@ -240,7 +256,6 @@ ImgView::ImgView(QWidget* parent)
         update();
     });
 
-    QSettings settings("ImgView", "ImgView");
     m_wheel_zoom = settings.value("Wheel zoom").toBool();
     QPushButton* btnWheelFunction = new QPushButton(m_wheel_zoom ? QStringLiteral(u"🔍") : QStringLiteral(u"🔃"), this);
     btnWheelFunction->setToolTip(QStringLiteral(u"Wheel function"));
@@ -274,6 +289,10 @@ void ImgView::paintEvent(QPaintEvent*){
     QElapsedTimer timer;
     timer.start();
     QPainter p(this);
+
+    if (m_antialiase) {
+        p.setRenderHints(QPainter::RenderHint::SmoothPixmapTransform | QPainter::RenderHint::Antialiasing);
+    }
 
     if (!m_imgstruct) {
         //just draw logo and quit

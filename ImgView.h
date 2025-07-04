@@ -119,6 +119,7 @@ private:
     bool m_show_text = false;
     bool m_wheel_zoom = true;
     bool m_show_thumb = false;
+    bool m_antialiase = false;
     int m_thumbcount = 0;
 };
 
