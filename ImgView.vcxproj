@@ -17,12 +17,14 @@
     <QtMoc Include="MainWindow.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="BackgroundWorker.cpp" />
     <ClCompile Include="IconEngine.cpp" />
     <ClCompile Include="ImageHashStore.cpp" />
     <ClCompile Include="ImgView.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <QtMoc Include="BackgroundWorker.h" />
     <ClInclude Include="IconEngine.h" />
     <ClInclude Include="ImageHashStore.h" />
     <ClInclude Include="resource.h" />

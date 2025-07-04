@@ -12,54 +12,7 @@
 #include <QDirIterator>
 
 #include "ImageHashStore.h"
-
-struct ImgStruct {
-    int idx;
-    QString fn;
-    QFileInfo fi;
-    QPixmap img, thumbnail;
-    QSizeF size, thumbsize;
-    QString errormessage;
-    QMutex mutex;
-    QPoint grid_idx;
-    enum class WorkToDo { loadImage, createThumbnail, destroyImage};
-    enum class WorkResult { none, loadedImage, loadedThumb, destroyedImage };
-    QSet<WorkToDo> worktodo;
-    bool load_thumbnail = false;
-    bool thumbnail_loaded = false;
-};
-
-class ImgLoaderTask : public QObject, public QRunnable {
-    Q_OBJECT
-public:
-    ImgStruct* imgStruct;
-    static inline ImageHashStore * m_imagehashstore = nullptr;
-    static inline QMutex m_mutex;
-    static inline QSet<ImgLoaderTask*> m_running;
-
-    ImgLoaderTask(ImgStruct* s) : imgStruct(s){
-        QMutexLocker locker(&m_mutex);
-        setAutoDelete(true);
-        m_running.insert(this);
-        if (!m_imagehashstore){
-            m_imagehashstore = new ImageHashStore;
-        }
-    }
-    ~ImgLoaderTask(){
-        QMutexLocker locker(&m_mutex);
-        m_running.remove(this);
-    }
-    static qsizetype runningCount(){
-        QMutexLocker locker(&m_mutex);
-        return m_running.size();
-    }
-
-    void run() override;
-
-signals:
-    void loaded(ImgStruct::WorkResult wr, size_t idx);
-};
-
+#include "BackgroundWorker.h"
 
 class ImgView : public QWidget {
     Q_OBJECT
@@ -73,11 +26,8 @@ public:
     void autofit();
     void loadImage(QStringList filename);
     void openFolder(QString dir);
-    void loaded(ImgStruct::WorkResult wr, size_t idx);
+    void loaded(ImgStruct::WorkItem wr, ImgStruct * imagestruct);
     void loadedFilenames(QList<ImgStruct*> is);
-    static QSet<QString> const& supportedExtensions(){
-        return m_supported_extensions;
-    }
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -105,7 +55,6 @@ private:
     void clearImages();
     void setTransform();
 
-    static inline QSet<QString> m_supported_extensions;
     QList<ImgStruct*> m_allImages;
     QMutex m_allImage_mutex;
     ImgStruct* m_imgstruct = 0;
@@ -121,23 +70,4 @@ private:
     bool m_show_thumb = false;
     bool m_antialiase = false;
     int m_thumbcount = 0;
-};
-
-class DirIteratorTask : public QObject, public QRunnable {
-    Q_OBJECT
-
-    QStringList m_fns;
-    QDirIterator::IteratorFlag m_itf;
-
-public:
-    DirIteratorTask(QStringList fns, QDirIterator::IteratorFlag itf)
-        : m_fns(fns)
-        , m_itf(itf){
-        setAutoDelete(true);
-    }
-
-    void run() override;
-
-signals:
-    void loadedFilenames(QList<ImgStruct*> list);
 };
