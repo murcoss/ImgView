@@ -2,7 +2,6 @@
 #include <QBuffer>
 #include <QDebug>
 #include <QSqlError>
-#include <QSqlQuery>
 #include <QStandardPaths>
 #include <QMutexLocker>
 #include <QDir>
@@ -13,7 +12,7 @@ ImageHashStore::ImageHashStore(){
     QDir dir(filename);
 
     if (!dir.exists()) {
-        dir.mkpath("."); // Create the full path if it doesn't exist
+        dir.mkpath(".");
     }
 
     filename.append(QStringLiteral(u"/thumbs.db"));
@@ -22,24 +21,26 @@ ImageHashStore::ImageHashStore(){
     db.setDatabaseName(filename);
     if (!db.open()) {
         qDebug() << db.lastError().nativeErrorCode();
-        qFatal("Failed to open database.");
+        return;
     }
-    initializeTable();
+
+    QSqlQuery query(db);
+    if (!query.exec("CREATE TABLE IF NOT EXISTS images (hash BLOB PRIMARY KEY,image BLOB)")) {
+        qWarning() << "Create table failed:" << query.lastError().text();
+        return;
+    }
+
+    m_insert_query = QSqlQuery(db);
+    query.prepare("INSERT INTO images (hash, image) VALUES (:hash, :image)");
+
+    m_get_query = QSqlQuery(db);
+    m_get_query.prepare(QStringLiteral(u"SELECT image FROM images WHERE hash = :hash"));
 }
 
 ImageHashStore::~ImageHashStore(){
     QMutexLocker locker(&lock);
     if (db.isOpen()) {
         db.close();
-    }
-}
-
-void ImageHashStore::initializeTable(){
-    QSqlQuery query(db);
-    if (!query.exec("CREATE TABLE IF NOT EXISTS images ("
-                    "hash BLOB PRIMARY KEY,"
-                    "image BLOB)")) {
-        qWarning() << "Create table failed:" << query.lastError().text();
     }
 }
 
@@ -57,13 +58,11 @@ void ImageHashStore::insert(const QImage& thumb, QByteArray const& hash){
     thumb.save(&qbuffer, "JPEG", 100);
     qbuffer.close();
 
-    QSqlQuery query(db);
-    query.prepare("INSERT INTO images (hash, image) VALUES (:hash, :image)");
-    query.bindValue(":hash", hash);
-    query.bindValue(":image", buffer);
+    m_insert_query.bindValue(":hash", hash);
+    m_insert_query.bindValue(":image", buffer);
 
-    if (!query.exec()) {
-        qWarning() << "Insert failed:" << query.lastError().text();
+    if (!m_insert_query.exec()) {
+        qWarning() << "Insert failed:" << m_insert_query.lastError().text();
     }
 
     return;
@@ -71,16 +70,14 @@ void ImageHashStore::insert(const QImage& thumb, QByteArray const& hash){
 
 QImage ImageHashStore::get(const QByteArray& hash) {
     QMutexLocker locker(&lock);
-    QSqlQuery query(db);
-    query.prepare(QStringLiteral(u"SELECT image FROM images WHERE hash = :hash"));
-    query.bindValue(":hash", hash);
-    if (!query.exec()) {
-        qWarning() << "Get query failed:" << query.lastError().text();
+
+    m_get_query.bindValue(":hash", hash);
+    if (!m_get_query.exec()) {
         return QImage();
     }
 
-    if (query.next()) {
-        QByteArray imgData = query.value(0).toByteArray();
+    if (m_get_query.next()) {
+        QByteArray imgData = m_get_query.value(0).toByteArray();
         QImage image;
         image.loadFromData(imgData, "JPEG");
         return image;
