@@ -116,7 +116,7 @@ void ImgView::paintEvent(QPaintEvent*){
         p.setRenderHints(QPainter::RenderHint::SmoothPixmapTransform | QPainter::RenderHint::Antialiasing);
     }
 
-    if (!m_imgstruct) {
+    if (!m_image_item) {
         //just draw logo and quit
         IconEngine ie;
         QSize const si(160, 160);
@@ -125,7 +125,7 @@ void ImgView::paintEvent(QPaintEvent*){
         return;
     }
 
-    ImgStruct &i = *m_imgstruct; 
+    ImageItem& i = *m_image_item; 
     QMutexLocker locker(&i.mutex);
     bool showThumb = false;
     if (i.img.isNull()) {
@@ -297,15 +297,15 @@ void ImgView::openFolder(QString dir){
     }
 }
 
-void ImgView::loaded(ImgStruct::WorkItem wr, ImgStruct * imagestruct)
+void ImgView::loaded(ImageItem::WorkItem wr, ImageItem * imagestruct)
 {
-    if (m_imgstruct) {
-        if (wr == ImgStruct::WorkItem::loadImage) {
-            if (imagestruct == m_imgstruct) {
+    if (m_image_item) {
+        if (wr == ImageItem::WorkItem::loadImage) {
+            if (imagestruct == m_image_item) {
                 update();
                 setTitle();
             }
-        } else if (wr == ImgStruct::WorkItem::createThumbnail) {
+        } else if (wr == ImageItem::WorkItem::createThumbnail) {
             m_thumbcount++;
         }
     }
@@ -314,29 +314,27 @@ void ImgView::loaded(ImgStruct::WorkItem wr, ImgStruct * imagestruct)
     nextImage(ImgView::FileDir::none);
 }
 
-void ImgView::loadedFilenames(QList<ImgStruct*> is){
+void ImgView::loadedFilenames(QList<ImageItem*> is){
     if (is.isEmpty()){
         return;
     }
+
     if (m_allImages.isEmpty()) {
-        m_imgstruct = is.front();
+        m_image_item = is.front();
         update();
     }
     m_allImages.append(is);
 
     //Calculate Position in grid
-    m_thumbcount = 0;
     int const dim = std::ceil(std::sqrt(m_allImages.size()));
-    int x = 0, y = 0;
-    for (auto& i : m_allImages){
-        i->grid_idx = QPoint(x, y);
+    int x = 0, y = 0, idx = 0;
+    for (auto& image_item : m_allImages){
+        image_item->grid_idx = QPoint(x, y);
+        image_item->idx = idx++;
         x++;
         if (x >= dim){
             x = 0;
             y++;
-        }
-        if (i->thumbnail_loaded){
-            m_thumbcount++;
         }
     }
 
@@ -359,7 +357,7 @@ void ImgView::nextImage(FileDir fd){
     }
 
     if (fd != FileDir::none) {
-        int nextidx = m_imgstruct->idx;
+        int nextidx = m_image_item->idx;
         if (fd == FileDir::next) {
             nextidx++;
             if (nextidx >= m_allImages.size()) {
@@ -371,7 +369,7 @@ void ImgView::nextImage(FileDir fd){
                 nextidx += m_allImages.size();
             }
         }
-        m_imgstruct = m_allImages.at(nextidx);
+        m_image_item = m_allImages.at(nextidx);
         autofit();
     } else {
         update();
@@ -387,7 +385,7 @@ void ImgView::nextImage(FileDir fd){
     }
 
     // Cache next Images
-    int const current_image = m_imgstruct->idx;
+    int const current_image = m_image_item->idx;
     for (int i_ = current_image - cores-1; i_<current_image + cores+1; i_++){
         int i = i_;
         if (i < 0){
@@ -396,19 +394,19 @@ void ImgView::nextImage(FileDir fd){
             i -= m_allImages.size();    
         }
         if (i >= 0 && i < static_cast<int>(m_allImages.size())) {
-            ImgStruct* is = m_allImages.at(i);
+            ImageItem* is = m_allImages.at(i);
             if (is->mutex.tryLock()) {
                 if (is->worktodo.isEmpty()) {
                     int dist = std::abs(i - current_image);
                     dist = std::min(dist, (int)m_allImages.size() - dist);
                     if (dist < cores) {
                         if (is->img.isNull()) {
-                            is->worktodo.insert(ImgStruct::WorkItem::loadImage);
+                            is->worktodo.insert(ImageItem::WorkItem::loadImage);
                             qDebug() << "Load " << is->idx << " (" << ImgLoaderTask::runningCount() << ")";
                         }
                     } else {
                         if (!is->img.isNull()) {
-                            is->worktodo.insert(ImgStruct::WorkItem::destroyImage);
+                            is->worktodo.insert(ImageItem::WorkItem::destroyImage);
                         }
                     }
                     if (!is->worktodo.isEmpty()) {
@@ -430,7 +428,7 @@ void ImgView::nextImage(FileDir fd){
             if (!is->load_thumbnail){
                 if (is->mutex.tryLock()) {
                     is->load_thumbnail = true;
-                    is->worktodo.insert(ImgStruct::WorkItem::createThumbnail);
+                    is->worktodo.insert(ImageItem::WorkItem::createThumbnail);
                     ImgLoaderTask* ilt = new ImgLoaderTask(is);
                     connect(ilt, &ImgLoaderTask::loaded, this, &ImgView::loaded);
                     QThreadPool::globalInstance()->start(ilt);
@@ -446,8 +444,8 @@ void ImgView::nextImage(FileDir fd){
 }
 
 void ImgView::setTitle(){
-    if (m_imgstruct) {
-        ImgStruct & is = *m_imgstruct;
+    if (m_image_item) {
+        ImageItem& is = *m_image_item;
         emit message(QStringLiteral(u"%1 %2 (%3/%4/%5) (%6x%7 %8kB)")
                 .arg(is.fi.fileName())
                 .arg(is.fi.absoluteFilePath())
@@ -461,14 +459,14 @@ void ImgView::setTitle(){
 }
 
 void ImgView::clearImages(){
-    QtConcurrent::blockingMap(m_allImages, [](ImgStruct* img) {
+    QtConcurrent::blockingMap(m_allImages, [](ImageItem* img) {
         if (img) {
             img->mutex.lock();
             delete img;
         }
     });
     m_allImages.clear();
-    m_imgstruct = 0;
+    m_image_item = 0;
 }
 
 void ImgView::closeEvent(QCloseEvent* event){

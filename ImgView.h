@@ -26,8 +26,8 @@ public:
     void autofit();
     void loadImage(QStringList filename);
     void openFolder(QString dir);
-    void loaded(ImgStruct::WorkItem wr, ImgStruct * imagestruct);
-    void loadedFilenames(QList<ImgStruct*> is);
+    void loaded(ImageItem::WorkItem wr, ImageItem * imagestruct);
+    void loadedFilenames(QList<ImageItem*> is);
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -55,9 +55,9 @@ private:
     void clearImages();
     void setTransform();
 
-    QList<ImgStruct*> m_allImages;
+    QList<ImageItem*> m_allImages;
     QMutex m_allImage_mutex;
-    ImgStruct* m_imgstruct = 0;
+    ImageItem* m_image_item = 0;
     QVector<QPushButton*> m_buttons;
     QPoint m_lastMousePos;
     QPointF m_offset;

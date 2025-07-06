@@ -12,7 +12,7 @@ void DirIteratorTask::run()
     QElapsedTimer ti;
     ti.start();
 
-    QList<ImgStruct*> tmpstruct;
+    QList<ImageItem*> tmpstruct;
 
     if (m_fns.isEmpty()) {
         return;
@@ -20,14 +20,13 @@ void DirIteratorTask::run()
 
     // Read file list as a list of file
     QString filetoshowfirst;
-    int idx = 0;
     for (auto const& fn : m_fns) {
         QFileInfo fi(fn);
         if (supportedExtensions().contains(fi.suffix().toLower())) {
-            tmpstruct.push_back(new ImgStruct);
-            tmpstruct.back()->fn = fn;
-            tmpstruct.back()->fi = fi;
-            tmpstruct.back()->idx = idx++;
+            ImageItem* image_item = new ImageItem;
+            tmpstruct.push_back(image_item);
+            image_item->fn = fn;
+            image_item->fi = fi;
             filetoshowfirst = fn;
         }
     }
@@ -51,10 +50,9 @@ void DirIteratorTask::run()
         if (file != filetoshowfirst) {
             QFileInfo fi(file);
             if (DirIteratorTask::supportedExtensions().contains(fi.suffix().toLower())) {
-                tmpstruct.push_back(new ImgStruct);
+                tmpstruct.push_back(new ImageItem);
                 tmpstruct.back()->fn = file;
                 tmpstruct.back()->fi = fi;
-                tmpstruct.back()->idx = idx++;
             }
         }
 
@@ -73,8 +71,8 @@ void ImgLoaderTask::readImageData(QString const filename, QByteArray& imageData)
             imageData = file.readAll();
             file.close();
         } else {
-            QMutexLocker locker(&imgStruct->mutex);
-            imgStruct->errormessage = file.errorString();
+            QMutexLocker locker(&m_image_item->mutex);
+            m_image_item->errormessage = file.errorString();
         }
     }
 }
@@ -85,8 +83,8 @@ void ImgLoaderTask::readImage(QByteArray & imageData, QImage& image){
         buffer.open(QIODevice::ReadOnly);
         QImageReader reader(&buffer);
         if (!reader.read(&image)){
-            QMutexLocker locker(&imgStruct->mutex);
-            imgStruct->errormessage = reader.errorString();
+            QMutexLocker locker(&m_image_item->mutex);
+            m_image_item->errormessage = reader.errorString();
         }
     }
 }
@@ -96,39 +94,39 @@ void ImgLoaderTask::run()
     QElapsedTimer ti;
     ti.start();
 
-    if (!imgStruct) {
+    if (!m_image_item) {
         return;
     }
 
-    imgStruct->mutex.lock();
-    QSet<ImgStruct::WorkItem> worktodo = std::move(imgStruct->worktodo);
-    QFileInfo const fi = imgStruct->fi;
-    imgStruct->mutex.unlock();
+    m_image_item->mutex.lock();
+    QSet<ImageItem::WorkItem> worktodo = std::move(m_image_item->worktodo);
+    QFileInfo const fi = m_image_item->fi;
+    m_image_item->mutex.unlock();
 
     QImage image, thumb;
     QByteArray imageData, hash;
 
-    if (worktodo.contains(ImgStruct::WorkItem::loadImage)) {
-        worktodo.insert(ImgStruct::WorkItem::createThumbnail);
+    if (worktodo.contains(ImageItem::WorkItem::loadImage)) {
+        worktodo.insert(ImageItem::WorkItem::createThumbnail);
         readImageData(fi.absoluteFilePath(), imageData);
         if (!imageData.isEmpty()){
             readImage(imageData, image);
             if (!image.isNull()) {
-                QMutexLocker locker(&imgStruct->mutex);
-                imgStruct->img = std::move(QPixmap::fromImage(image));
-                imgStruct->size = image.size();
-                emit loaded(ImgStruct::WorkItem::loadImage, imgStruct);
+                QMutexLocker locker(&m_image_item->mutex);
+                m_image_item->img = std::move(QPixmap::fromImage(image));
+                m_image_item->size = image.size();
+                emit loaded(ImageItem::WorkItem::loadImage, m_image_item);
             }
         }
     }
 
-    if (worktodo.contains(ImgStruct::WorkItem::createThumbnail)) {
+    if (worktodo.contains(ImageItem::WorkItem::createThumbnail)) {
         readImageData(fi.absoluteFilePath(), imageData);
         if (!imageData.isEmpty()){
             hash = ImageHashStore::calculateHash(imageData);
             thumb = m_imagehashstore->get(hash);
         }
-        if (thumb.isNull()) {
+        if (!imageData.isEmpty() && thumb.isNull()) {
             readImage(imageData, image);
             if (!image.isNull()) {
                 hash = ImageHashStore::calculateHash(imageData);
@@ -143,22 +141,22 @@ void ImgLoaderTask::run()
             }
         }
         if (!thumb.isNull()) {
-            QMutexLocker locker(&imgStruct->mutex);
-            imgStruct->thumbnail = QPixmap::fromImage(thumb);
-            imgStruct->size = image.size();
-            if (imgStruct->size.width() > 0) {
-                imgStruct->thumbsize = imgStruct->size.scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
+            QMutexLocker locker(&m_image_item->mutex);
+            m_image_item->thumbnail = QPixmap::fromImage(thumb);
+            m_image_item->size = image.size();
+            if (m_image_item->size.width() > 0) {
+                m_image_item->thumbsize = m_image_item->size.scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
             } else {
-                imgStruct->thumbsize = thumb.size().toSizeF().scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
+                m_image_item->thumbsize = thumb.size().toSizeF().scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
             }
-            emit loaded(ImgStruct::WorkItem::createThumbnail, imgStruct);
+            emit loaded(ImageItem::WorkItem::createThumbnail, m_image_item);
         }
     }
 
-    if (imgStruct->worktodo.contains(ImgStruct::WorkItem::destroyImage)) {
-        QMutexLocker locker(&imgStruct->mutex);
-        QPixmap().swap(imgStruct->img);
-        emit loaded(ImgStruct::WorkItem::destroyImage, imgStruct);
+    if (m_image_item->worktodo.contains(ImageItem::WorkItem::destroyImage)) {
+        QMutexLocker locker(&m_image_item->mutex);
+        QPixmap().swap(m_image_item->img);
+        emit loaded(ImageItem::WorkItem::destroyImage, m_image_item);
     }
 
     return;
