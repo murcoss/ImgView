@@ -12,7 +12,7 @@ void DirIteratorTask::run()
     QElapsedTimer ti;
     ti.start();
 
-    QList<ImageItem*> tmpstruct;
+    QList<ImageItem*> newimageitems;
 
     if (m_fns.isEmpty()) {
         return;
@@ -24,16 +24,16 @@ void DirIteratorTask::run()
         QFileInfo fi(fn);
         if (supportedExtensions().contains(fi.suffix().toLower())) {
             ImageItem* image_item = new ImageItem;
-            tmpstruct.push_back(image_item);
-            image_item->fn = fn;
+            newimageitems.push_back(image_item);
+            //image_item->fn = fn;
             image_item->fi = fi;
             filetoshowfirst = fn;
         }
     }
 
-    if (!tmpstruct.isEmpty()) {
-        emit loadedFilenames(tmpstruct);
-        tmpstruct.clear();
+    if (!newimageitems.isEmpty()) {
+        emit loadedFilenames(newimageitems);
+        newimageitems.clear();
     }
 
     // If we got a list of files, only load these
@@ -50,16 +50,16 @@ void DirIteratorTask::run()
         if (file != filetoshowfirst) {
             QFileInfo fi(file);
             if (DirIteratorTask::supportedExtensions().contains(fi.suffix().toLower())) {
-                tmpstruct.push_back(new ImageItem);
-                tmpstruct.back()->fn = file;
-                tmpstruct.back()->fi = fi;
+                newimageitems.push_back(new ImageItem);
+                //newimageitems.back()->fn = file;
+                newimageitems.back()->fi = fi;
             }
         }
 
         if ((ti.elapsed() > 10) || !it.hasNext()) {
             ti.restart();
-            emit loadedFilenames(tmpstruct);
-            tmpstruct.clear();
+            emit loadedFilenames(newimageitems);
+            newimageitems.clear();
         }
     }
 }
@@ -99,7 +99,7 @@ void ImgLoaderTask::run()
     }
 
     m_image_item->mutex.lock();
-    QSet<ImageItem::WorkItem> worktodo = std::move(m_image_item->worktodo);
+    QSet<ImageItem::WorkItem> worktodo = m_image_item->worktodo;
     QFileInfo const fi = m_image_item->fi;
     m_image_item->mutex.unlock();
 
@@ -107,7 +107,9 @@ void ImgLoaderTask::run()
     QByteArray imageData, hash;
 
     if (worktodo.contains(ImageItem::WorkItem::loadImage)) {
-        worktodo.insert(ImageItem::WorkItem::createThumbnail);
+        if (!m_image_item->thumbnail.isNull()) {
+            worktodo.insert(ImageItem::WorkItem::createThumbnail);
+        }
         readImageData(fi.absoluteFilePath(), imageData);
         if (!imageData.isEmpty()){
             readImage(imageData, image);
@@ -159,5 +161,30 @@ void ImgLoaderTask::run()
         emit loaded(ImageItem::WorkItem::destroyImage, m_image_item);
     }
 
+    QMutexLocker locker(&m_image_item->mutex);
+    m_image_item->worktodo.clear();
+
     return;
+}
+
+ImgLoaderTask::ImgLoaderTask(ImageItem* s) : m_image_item(s)
+{
+    QMutexLocker locker(&m_mutex);
+    setAutoDelete(true);
+    m_running.insert(this);
+    if (!m_imagehashstore) {
+        m_imagehashstore = new ImageHashStore;
+    }
+}
+
+ImgLoaderTask::~ImgLoaderTask()
+{
+    QMutexLocker locker(&m_mutex);
+    m_running.remove(this);
+}
+
+qsizetype ImgLoaderTask::runningCount()
+{
+    QMutexLocker locker(&m_mutex);
+    return m_running.size();
 }

@@ -11,7 +11,7 @@
 
 struct ImageItem {
     enum class WorkItem { none, loadImage, createThumbnail, destroyImage };
-    QString fn;
+    //QString fn;
     QPixmap img, thumbnail;
     QString errormessage;
     QSizeF size, thumbsize;
@@ -22,6 +22,18 @@ struct ImageItem {
     int idx;
     bool load_thumbnail = false;
     bool thumbnail_loaded = false;
+    bool m_hovered = false;
+    QRectF thumbrect() const {
+        QPointF topLeft((1. - thumbsize.width()) / 2.0 + grid_idx.x(), (1. - thumbsize.height()) / 2.0 + grid_idx.y());
+        QRectF const rect(topLeft, thumbsize);
+        return rect;
+    }
+    QRectF rect() const
+    {
+        QPointF topLeft((1. - size.width()) / 2.0 + grid_idx.x(), (1. - size.height()) / 2.0 + grid_idx.y());
+        QRectF const rect(topLeft, size);
+        return rect;
+    }
 };
 
 class ImgLoaderTask : public QObject, public QRunnable {
@@ -36,23 +48,9 @@ public:
     static inline QMutex m_mutex;
     static inline QSet<ImgLoaderTask*> m_running;
 
-    ImgLoaderTask(ImageItem* s)
-        : m_image_item(s){
-        QMutexLocker locker(&m_mutex);
-        setAutoDelete(true);
-        m_running.insert(this);
-        if (!m_imagehashstore) {
-            m_imagehashstore = new ImageHashStore;
-        }
-    }
-    ~ImgLoaderTask(){
-        QMutexLocker locker(&m_mutex);
-        m_running.remove(this);
-    }
-    static qsizetype runningCount(){
-        QMutexLocker locker(&m_mutex);
-        return m_running.size();
-    }
+    ImgLoaderTask(ImageItem* s);
+    ~ImgLoaderTask();
+    static qsizetype runningCount();
 
     void run() override;
 

@@ -151,11 +151,31 @@ void ImgView::paintEvent(QPaintEvent*){
     QRectF const targetRect(topLeft, scaledSize);
     p.drawPixmap(targetRect, img, QRectF(QPointF(0, 0), img.size()));
 
+    //QRectF visibleLogicalRect = m_transform.inverted().mapRect(QRectF(this->rect()));
 
-    for (auto const& is : m_allImages){
-        QPointF const topLeft((1. - is->thumbsize.width()) / 2.0 + is->grid_idx.x(), (1. - is->thumbsize.height()) / 2.0 + is->grid_idx.y());
-        QRectF const targetRect(topLeft, is->thumbsize);
-        p.drawPixmap(targetRect, is->thumbnail, QRectF(QPointF(0, 0), is->thumbnail.size()));
+    //m_visibleImages.clear();
+    //for (auto const& is : m_allImages){
+    //    if (is->thumbrect().intersects(visibleLogicalRect)) {
+    //        m_visibleImages.insert(is);
+    //        p.drawPixmap(is->thumbrect(), is->thumbnail, QRectF(QPointF(0, 0), is->thumbnail.size()));
+    //    }
+    //}
+
+    for (auto& is : m_visibleImages) {
+        p.drawPixmap(is->thumbrect(), is->thumbnail, QRectF(QPointF(0, 0), is->thumbnail.size()));
+    }
+
+    for (auto & is : m_visibleImages){
+        if (is->m_hovered) {
+            QPointF topLeftDevice = m_transform.map(is->thumbrect().topLeft());
+            QPointF bottomRightDevice = m_transform.map(is->thumbrect().bottomRight());
+            QRectF targetRectDevice(topLeftDevice, bottomRightDevice);
+
+            p.resetTransform();
+            QPen pen(Qt::red, 1);
+            p.setPen(pen);
+            p.drawRect(targetRectDevice);
+        }
     }
 
     qDebug() << "Paintevent time us: " << timer.nsecsElapsed() / 1000;
@@ -178,8 +198,19 @@ void ImgView::mousePressEvent(QMouseEvent* event){
 }
 
 void ImgView::mouseMoveEvent(QMouseEvent* event){
+    QPointF pos = event->pos();
+    QPointF logicalMousePos = m_transform.inverted().map(pos);
+
+    for (auto& v : m_visibleImages){
+        bool const contains = v->thumbrect().contains(logicalMousePos);
+        if (v->m_hovered != contains){
+            v->m_hovered = contains;
+            update();
+        }
+    }
+
     if (event->buttons() & Qt::LeftButton) {
-        QPoint const delta = event->pos() - m_lastMousePos;
+        QPointF const delta = event->pos() - m_lastMousePos;
         m_offset += delta;
         m_lastMousePos = event->pos();
         setTransform();
@@ -297,15 +328,16 @@ void ImgView::openFolder(QString dir){
     }
 }
 
-void ImgView::loaded(ImageItem::WorkItem wr, ImageItem * imagestruct)
+void ImgView::loaded(ImageItem::WorkItem wr, ImageItem * imageitem)
 {
     if (m_image_item) {
         if (wr == ImageItem::WorkItem::loadImage) {
-            if (imagestruct == m_image_item) {
+            if (imageitem == m_image_item) {
                 update();
                 setTitle();
             }
         } else if (wr == ImageItem::WorkItem::createThumbnail) {
+            qDebug() << "created thumb " << imageitem->idx;
             m_thumbcount++;
         }
     }
@@ -466,6 +498,7 @@ void ImgView::clearImages(){
         }
     });
     m_allImages.clear();
+    m_visibleImages.clear();
     m_image_item = 0;
 }
 
@@ -480,6 +513,15 @@ void ImgView::setTransform(){
     m_transform.translate(m_offset.x() + center.x(), m_offset.y() + center.y());
     m_transform.scale(m_zoom, m_zoom);
     m_transform.translate(-center.x(), -center.y());
+
+    QRectF const visibleLogicalRect = m_transform.inverted().mapRect(QRectF(this->rect()));
+    m_visibleImages.clear();
+    for (auto const& is : m_allImages) {
+        if (is->thumbrect().intersects(visibleLogicalRect)) {
+            m_visibleImages.insert(is);
+        }
+    }
+    qDebug() << "Visible thumbs: " << m_visibleImages.size();
 }
 
 void ImgView::customContextMenu(QPoint pos){

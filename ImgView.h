@@ -56,10 +56,12 @@ private:
     void setTransform();
 
     QList<ImageItem*> m_allImages;
+    QSet<ImageItem*> m_visibleImages;
     QMutex m_allImage_mutex;
     ImageItem* m_image_item = 0;
     QVector<QPushButton*> m_buttons;
-    QPoint m_lastMousePos;
+    QPointF m_lastMousePos;
+    QPointF m_lastMouseHoverPos;
     QPointF m_offset;
     QPoint m_pressed;
     double m_zoom = 1.;
