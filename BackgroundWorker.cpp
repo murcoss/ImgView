@@ -127,6 +127,9 @@ void ImgLoaderTask::run()
         if (!imageData.isEmpty()){
             hash = ImageHashStore::calculateHash(imageData);
             thumb = m_imagehashstore->get(hash);
+            if (!thumb.isNull()){
+                qDebug() << "loaded thumb " << m_image_item->idx;
+            }
         }
         if (!imageData.isEmpty() && thumb.isNull()) {
             readImage(imageData, image);
@@ -140,6 +143,7 @@ void ImgLoaderTask::run()
                     thumb = image.scaled(QSize(maxsize, maxsize), Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 }
                 m_imagehashstore->insert(thumb, hash);
+                qDebug() << "created thumb " << m_image_item->idx;
             }
         }
         if (!thumb.isNull()) {

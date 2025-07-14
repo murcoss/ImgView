@@ -162,7 +162,13 @@ void ImgView::paintEvent(QPaintEvent*){
     //}
 
     for (auto& is : m_visibleImages) {
-        p.drawPixmap(is->thumbrect(), is->thumbnail, QRectF(QPointF(0, 0), is->thumbnail.size()));
+        if (is->thumbnail.isNull()){
+            p.setPen(QPen(Qt::black, 0));
+            p.drawRect(is->thumbrect());
+        } else {
+            p.drawPixmap(is->thumbrect(), is->thumbnail, QRectF(QPointF(0, 0), is->thumbnail.size()));
+        }
+
     }
 
     for (auto & is : m_visibleImages){
@@ -337,7 +343,6 @@ void ImgView::loaded(ImageItem::WorkItem wr, ImageItem * imageitem)
                 setTitle();
             }
         } else if (wr == ImageItem::WorkItem::createThumbnail) {
-            qDebug() << "created thumb " << imageitem->idx;
             m_thumbcount++;
         }
     }
