@@ -101,14 +101,15 @@ void ImgLoaderTask::run()
     m_image_item->mutex.lock();
     QSet<ImageItem::WorkItem> worktodo = m_image_item->worktodo;
     QFileInfo const fi = m_image_item->fi;
+    QByteArray hash = m_image_item->hash;
     m_image_item->mutex.unlock();
 
     QImage image, thumb;
-    QByteArray imageData, hash;
+    QByteArray imageData;
 
     if (worktodo.contains(ImageItem::WorkItem::loadImage)) {
         if (!m_image_item->thumbnail.isNull()) {
-            worktodo.insert(ImageItem::WorkItem::createThumbnail);
+            worktodo.insert(ImageItem::WorkItem::loadThumbnail);
         }
         readImageData(fi.absoluteFilePath(), imageData);
         if (!imageData.isEmpty()){
@@ -122,19 +123,22 @@ void ImgLoaderTask::run()
         }
     }
 
-    if (worktodo.contains(ImageItem::WorkItem::createThumbnail)) {
-        readImageData(fi.absoluteFilePath(), imageData);
-        if (!imageData.isEmpty()){
-            hash = ImageHashStore::calculateHash(imageData);
-            thumb = m_imagehashstore->get(hash);
-            if (!thumb.isNull()){
-                qDebug() << "loaded thumb " << m_image_item->idx;
-            }
+    if (worktodo.contains(ImageItem::WorkItem::loadThumbnail)) {
+        if (hash.isEmpty()) {
+            QString const textkey = QStringLiteral(u"path=%1;size=%2;time=%3").arg(fi.absoluteFilePath()).arg(fi.size()).arg(fi.lastModified().toSecsSinceEpoch());
+            hash = QCryptographicHash::hash(textkey.toUtf8(), QCryptographicHash::Sha256);
+        }
+        thumb = m_imagehashstore->getByHash(hash);
+
+        if (!thumb.isNull()) {
+            //qDebug() << "thumb loaded by textkey " << m_image_item->idx;
+        }
+        if (thumb.isNull()) {
+            readImageData(fi.absoluteFilePath(), imageData);
         }
         if (!imageData.isEmpty() && thumb.isNull()) {
             readImage(imageData, image);
             if (!image.isNull()) {
-                hash = ImageHashStore::calculateHash(imageData);
                 int const constexpr maxsize = 256;
                 int const imgsize = std::max(image.width(), image.height());
                 if (imgsize < maxsize) {
@@ -142,8 +146,8 @@ void ImgLoaderTask::run()
                 } else {
                     thumb = image.scaled(QSize(maxsize, maxsize), Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 }
-                m_imagehashstore->insert(thumb, hash);
-                qDebug() << "created thumb " << m_image_item->idx;
+                m_imagehashstore->insert(thumb, hash, fi.absoluteFilePath(), fi.size());
+                //qDebug() << "created thumb " << m_image_item->idx;
             }
         }
         if (!thumb.isNull()) {
@@ -155,7 +159,7 @@ void ImgLoaderTask::run()
             } else {
                 m_image_item->thumbsize = thumb.size().toSizeF().scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
             }
-            emit loaded(ImageItem::WorkItem::createThumbnail, m_image_item);
+            emit loaded(ImageItem::WorkItem::loadThumbnail, m_image_item);
         }
     }
 

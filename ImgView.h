@@ -54,9 +54,12 @@ private:
     void setTitle();
     void clearImages();
     void setTransform();
+    void openDatabase();
 
     QList<ImageItem*> m_allImages;
     QSet<ImageItem*> m_visibleImages;
+    QSizeF m_visibleImage_size;
+    ImageItem* m_hoveredImage = 0;
     QMutex m_allImage_mutex;
     ImageItem* m_image_item = 0;
     QVector<QPushButton*> m_buttons;

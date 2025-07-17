@@ -8,6 +8,7 @@
 #include <QDirIterator>
 #include <QInputDialog>
 #include <QtConcurrent>
+#include <QStyle>
 
 #include "ImgView.h"
 #include "IconEngine.h"
@@ -23,7 +24,8 @@ ImgView::ImgView(QWidget* parent)
 
     connect(this, &ImgView::customContextMenuRequested, this, &ImgView::customContextMenu);
 
-    QPushButton* btnLoad = new QPushButton("📂", this);
+    QPushButton* btnLoad = new QPushButton(this);
+    btnLoad->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
     btnLoad->setToolTip(QStringLiteral(u"Load Image"));
     btnLoad->setFixedSize(24, 24);
     btnLoad->raise();
@@ -32,7 +34,8 @@ ImgView::ImgView(QWidget* parent)
         loadImage(QStringList());
     });
 
-    QPushButton* btnOpen = new QPushButton("📂", this);
+    QPushButton* btnOpen = new QPushButton(this);
+    btnOpen->setIcon(style()->standardIcon(QStyle::SP_DirOpenIcon));
     btnOpen->setToolTip(QStringLiteral(u"Open Folder"));
     btnOpen->setFixedSize(24, 24);
     btnOpen->raise();
@@ -40,6 +43,13 @@ ImgView::ImgView(QWidget* parent)
     connect(btnOpen, &QPushButton::clicked, [this]() {
         openFolder(QString());
     });
+
+    QPushButton* btnOpenDatabase = new QPushButton(QStringLiteral(u"🗃️"), this);
+    btnOpenDatabase->setToolTip(QStringLiteral(u"Open Folder"));
+    btnOpenDatabase->setFixedSize(24, 24);
+    btnOpenDatabase->raise();
+    m_buttons.push_back(btnOpenDatabase);
+    connect(btnOpenDatabase, &QPushButton::clicked, this, &ImgView::openDatabase);
 
     m_antialiase = settings.value("Wheel zoom").toBool();
     QPushButton* btnSmooth = new QPushButton(m_antialiase ? QStringLiteral(u"🌀") : QStringLiteral(u"░"), this);
@@ -168,23 +178,20 @@ void ImgView::paintEvent(QPaintEvent*){
         } else {
             p.drawPixmap(is->thumbrect(), is->thumbnail, QRectF(QPointF(0, 0), is->thumbnail.size()));
         }
-
     }
 
-    for (auto & is : m_visibleImages){
-        if (is->m_hovered) {
-            QPointF topLeftDevice = m_transform.map(is->thumbrect().topLeft());
-            QPointF bottomRightDevice = m_transform.map(is->thumbrect().bottomRight());
-            QRectF targetRectDevice(topLeftDevice, bottomRightDevice);
+    if(m_hoveredImage){
+        QPointF topLeftDevice = m_transform.map(m_hoveredImage->thumbrect().topLeft());
+        QPointF bottomRightDevice = m_transform.map(m_hoveredImage->thumbrect().bottomRight());
+        QRectF targetRectDevice(topLeftDevice, bottomRightDevice);
 
-            p.resetTransform();
-            QPen pen(Qt::red, 1);
-            p.setPen(pen);
-            p.drawRect(targetRectDevice);
-        }
+        p.resetTransform();
+        QPen pen(Qt::red, 1);
+        p.setPen(pen);
+        p.drawRect(targetRectDevice);
     }
 
-    qDebug() << "Paintevent time us: " << timer.nsecsElapsed() / 1000;
+    //qDebug() << "Paintevent time us: " << timer.nsecsElapsed() / 1000;
 }
 
 void ImgView::mouseDoubleClickEvent(QMouseEvent*){
@@ -204,14 +211,14 @@ void ImgView::mousePressEvent(QMouseEvent* event){
 }
 
 void ImgView::mouseMoveEvent(QMouseEvent* event){
-    QPointF pos = event->pos();
-    QPointF logicalMousePos = m_transform.inverted().map(pos);
+    QPointF const logicalMousePos = m_transform.inverted().map(event->pos());
 
     for (auto& v : m_visibleImages){
         bool const contains = v->thumbrect().contains(logicalMousePos);
-        if (v->m_hovered != contains){
-            v->m_hovered = contains;
+        if (contains){
+            m_hoveredImage = v;
             update();
+            break;
         }
     }
 
@@ -253,6 +260,7 @@ void ImgView::wheelEvent(QWheelEvent* event) {
 
 void ImgView::leaveEvent(QEvent*){
     m_lastMousePos = QPoint(-1, -1);
+    m_hoveredImage = 0;
     update();
 }
 
@@ -290,8 +298,7 @@ void ImgView::keyPressEvent(QKeyEvent* event){
     }
 }
 
-void ImgView::loadImage(QStringList filenames)
-{
+void ImgView::loadImage(QStringList filenames){
     QSettings settings("ImgView", "ImgView");
 
     // If we get no list of filenames, ask user
@@ -315,6 +322,7 @@ void ImgView::loadImage(QStringList filenames)
 
     getFiles(filenames, QDirIterator::Subdirectories);
 }
+
 void ImgView::getFiles(QStringList filenames, QDirIterator::IteratorFlag itf){
     clearImages();
     DirIteratorTask* dit = new DirIteratorTask(filenames, itf);
@@ -342,7 +350,7 @@ void ImgView::loaded(ImageItem::WorkItem wr, ImageItem * imageitem)
                 update();
                 setTitle();
             }
-        } else if (wr == ImageItem::WorkItem::createThumbnail) {
+        } else if (wr == ImageItem::WorkItem::loadThumbnail) {
             m_thumbcount++;
         }
     }
@@ -465,7 +473,7 @@ void ImgView::nextImage(FileDir fd){
             if (!is->load_thumbnail){
                 if (is->mutex.tryLock()) {
                     is->load_thumbnail = true;
-                    is->worktodo.insert(ImageItem::WorkItem::createThumbnail);
+                    is->worktodo.insert(ImageItem::WorkItem::loadThumbnail);
                     ImgLoaderTask* ilt = new ImgLoaderTask(is);
                     connect(ilt, &ImgLoaderTask::loaded, this, &ImgView::loaded);
                     QThreadPool::globalInstance()->start(ilt);
@@ -505,11 +513,16 @@ void ImgView::clearImages(){
     m_allImages.clear();
     m_visibleImages.clear();
     m_image_item = 0;
+    m_hoveredImage = 0;
+    m_thumbcount = 0;
 }
 
 void ImgView::closeEvent(QCloseEvent* event){
     QThreadPool::globalInstance()->waitForDone();
     event->accept();
+}
+
+void ImgView::openDatabase(){
 }
 
 void ImgView::setTransform(){
@@ -524,9 +537,10 @@ void ImgView::setTransform(){
     for (auto const& is : m_allImages) {
         if (is->thumbrect().intersects(visibleLogicalRect)) {
             m_visibleImages.insert(is);
+            m_visibleImage_size = m_transform.mapRect(is->thumbrect()).size();
         }
     }
-    qDebug() << "Visible thumbs: " << m_visibleImages.size();
+    //qDebug() << "Visible thumbs: " << m_visibleImages.size();
 }
 
 void ImgView::customContextMenu(QPoint pos){

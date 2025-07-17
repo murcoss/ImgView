@@ -10,9 +10,9 @@
 #include "ImageHashStore.h"
 
 struct ImageItem {
-    enum class WorkItem { none, loadImage, createThumbnail, destroyImage };
-    //QString fn;
+    enum class WorkItem { none, loadImage, loadThumbnail, destroyImage };
     QPixmap img, thumbnail;
+    QByteArray hash;
     QString errormessage;
     QSizeF size, thumbsize;
     QFileInfo fi;
@@ -22,14 +22,12 @@ struct ImageItem {
     int idx;
     bool load_thumbnail = false;
     bool thumbnail_loaded = false;
-    bool m_hovered = false;
     QRectF thumbrect() const {
         QPointF topLeft((1. - thumbsize.width()) / 2.0 + grid_idx.x(), (1. - thumbsize.height()) / 2.0 + grid_idx.y());
         QRectF const rect(topLeft, thumbsize);
         return rect;
     }
-    QRectF rect() const
-    {
+    QRectF rect() const{
         QPointF topLeft((1. - size.width()) / 2.0 + grid_idx.x(), (1. - size.height()) / 2.0 + grid_idx.y());
         QRectF const rect(topLeft, size);
         return rect;

@@ -12,12 +12,11 @@ public:
     ImageHashStore();
     ~ImageHashStore();
 
-    void insert(QImage const& image, QByteArray const& hash);
-    QImage get(const QByteArray& hash);
-    static QByteArray calculateHash(QByteArray const& image);
+    void insert(QImage thumb, QByteArray const hash, QString const filepath, uint64_t filesize);
+    QImage getByHash(const QByteArray hash);
 
 private:
     QSqlDatabase db;
     QMutex lock;
-    QSqlQuery m_insert_query, m_get_query;
+    QSqlQuery m_insert_query, m_get_by_hash_query;
 };
