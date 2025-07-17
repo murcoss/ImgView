@@ -350,7 +350,7 @@ void ImgView::loaded(ImageItem::WorkItem wr, ImageItem * imageitem)
                 update();
                 setTitle();
             }
-        } else if (wr == ImageItem::WorkItem::loadThumbnail) {
+        } else if (wr == ImageItem::WorkItem::loadThumbnail256) {
             m_thumbcount++;
         }
     }
@@ -455,9 +455,7 @@ void ImgView::nextImage(FileDir fd){
                         }
                     }
                     if (!is->worktodo.isEmpty()) {
-                        ImgLoaderTask* ilt = new ImgLoaderTask(is);
-                        connect(ilt, &ImgLoaderTask::loaded, this, &ImgView::loaded);
-                        QThreadPool::globalInstance()->start(ilt);
+                        new ImgLoaderTask(is, this);
                     }
                 }
                 is->mutex.unlock();
@@ -473,10 +471,8 @@ void ImgView::nextImage(FileDir fd){
             if (!is->load_thumbnail){
                 if (is->mutex.tryLock()) {
                     is->load_thumbnail = true;
-                    is->worktodo.insert(ImageItem::WorkItem::loadThumbnail);
-                    ImgLoaderTask* ilt = new ImgLoaderTask(is);
-                    connect(ilt, &ImgLoaderTask::loaded, this, &ImgView::loaded);
-                    QThreadPool::globalInstance()->start(ilt);
+                    is->worktodo.insert(ImageItem::WorkItem::loadThumbnail256);
+                    new ImgLoaderTask(is, this);
                     is->mutex.unlock();
                     if (ImgLoaderTask::runningCount() >= cores) {
                         break;

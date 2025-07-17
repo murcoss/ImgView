@@ -10,7 +10,7 @@
 #include "ImageHashStore.h"
 
 struct ImageItem {
-    enum class WorkItem { none, loadImage, loadThumbnail, destroyImage };
+    enum class WorkItem { none, loadImage, loadThumbnail256, destroyImage };
     QPixmap img, thumbnail;
     QByteArray hash;
     QString errormessage;
@@ -41,12 +41,15 @@ class ImgLoaderTask : public QObject, public QRunnable {
     void readImage(QByteArray& imageData, QImage& image);
 
 public:
-    ImageItem* m_image_item;
+    ImageItem* m_image_item = 0;
+    QSet<ImageItem*> m_image_items;
     static inline ImageHashStore* m_imagehashstore = nullptr;
     static inline QMutex m_mutex;
     static inline QSet<ImgLoaderTask*> m_running;
 
-    ImgLoaderTask(ImageItem* s);
+    ImgLoaderTask(QObject* parent);
+    ImgLoaderTask(ImageItem* s, QObject* parent);
+    ImgLoaderTask(QSet<ImageItem*> items, QObject* parent);
     ~ImgLoaderTask();
     static qsizetype runningCount();
 

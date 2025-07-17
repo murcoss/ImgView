@@ -13,7 +13,7 @@ public:
     ~ImageHashStore();
 
     void insert(QImage thumb, QByteArray const hash, QString const filepath, uint64_t filesize);
-    QImage getByHash(const QByteArray hash);
+    QByteArray getByHash(const QByteArray hash);
 
 private:
     QSqlDatabase db;

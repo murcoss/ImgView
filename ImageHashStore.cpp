@@ -71,21 +71,20 @@ void ImageHashStore::insert(QImage thumb, QByteArray const hash, QString const f
     return;
 }
 
-QImage ImageHashStore::getByHash(const QByteArray hash) {
+QByteArray ImageHashStore::getByHash(const QByteArray hash)
+{
     QMutexLocker locker(&lock);
 
     m_get_by_hash_query.finish();
     m_get_by_hash_query.bindValue(":hash", hash);
     if (!m_get_by_hash_query.exec()) {
-        return QImage();
+        return QByteArray();
     }
 
     if (m_get_by_hash_query.next()) {
-        QByteArray imgData = m_get_by_hash_query.value(0).toByteArray();
-        QImage image;
-        image.loadFromData(imgData, "JPEG");
-        return image;
+        QByteArray const imgData = m_get_by_hash_query.value(0).toByteArray();
+        return imgData;
     }
 
-    return QImage();
+    return QByteArray();
 }

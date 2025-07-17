@@ -3,8 +3,10 @@
 #include <QFileInfo>
 #include <QPixmap>
 #include <QImageReader>
+#include <QThreadPool>
 
 #include "BackgroundWorker.h"
+#include "ImgView.h"
 
 
 void DirIteratorTask::run()
@@ -25,7 +27,6 @@ void DirIteratorTask::run()
         if (supportedExtensions().contains(fi.suffix().toLower())) {
             ImageItem* image_item = new ImageItem;
             newimageitems.push_back(image_item);
-            //image_item->fn = fn;
             image_item->fi = fi;
             filetoshowfirst = fn;
         }
@@ -51,7 +52,6 @@ void DirIteratorTask::run()
             QFileInfo fi(file);
             if (DirIteratorTask::supportedExtensions().contains(fi.suffix().toLower())) {
                 newimageitems.push_back(new ImageItem);
-                //newimageitems.back()->fn = file;
                 newimageitems.back()->fi = fi;
             }
         }
@@ -89,8 +89,7 @@ void ImgLoaderTask::readImage(QByteArray & imageData, QImage& image){
     }
 }
 
-void ImgLoaderTask::run()
-{
+void ImgLoaderTask::run(){
     QElapsedTimer ti;
     ti.start();
 
@@ -109,7 +108,7 @@ void ImgLoaderTask::run()
 
     if (worktodo.contains(ImageItem::WorkItem::loadImage)) {
         if (!m_image_item->thumbnail.isNull()) {
-            worktodo.insert(ImageItem::WorkItem::loadThumbnail);
+            worktodo.insert(ImageItem::WorkItem::loadThumbnail256);
         }
         readImageData(fi.absoluteFilePath(), imageData);
         if (!imageData.isEmpty()){
@@ -123,12 +122,13 @@ void ImgLoaderTask::run()
         }
     }
 
-    if (worktodo.contains(ImageItem::WorkItem::loadThumbnail)) {
+    if (worktodo.contains(ImageItem::WorkItem::loadThumbnail256)) {
         if (hash.isEmpty()) {
             QString const textkey = QStringLiteral(u"path=%1;size=%2;time=%3").arg(fi.absoluteFilePath()).arg(fi.size()).arg(fi.lastModified().toSecsSinceEpoch());
             hash = QCryptographicHash::hash(textkey.toUtf8(), QCryptographicHash::Sha256);
         }
-        thumb = m_imagehashstore->getByHash(hash);
+        QByteArray const thumbdata = m_imagehashstore->getByHash(hash);
+        thumb.loadFromData(thumbdata, "JPEG");
 
         if (!thumb.isNull()) {
             //qDebug() << "thumb loaded by textkey " << m_image_item->idx;
@@ -159,7 +159,7 @@ void ImgLoaderTask::run()
             } else {
                 m_image_item->thumbsize = thumb.size().toSizeF().scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
             }
-            emit loaded(ImageItem::WorkItem::loadThumbnail, m_image_item);
+            emit loaded(ImageItem::WorkItem::loadThumbnail256, m_image_item);
         }
     }
 
@@ -171,28 +171,39 @@ void ImgLoaderTask::run()
 
     QMutexLocker locker(&m_image_item->mutex);
     m_image_item->worktodo.clear();
+    m_image_item->hash = std::move(hash);
 
     return;
 }
 
-ImgLoaderTask::ImgLoaderTask(ImageItem* s) : m_image_item(s)
-{
+ImgLoaderTask::ImgLoaderTask(QObject* parent){
     QMutexLocker locker(&m_mutex);
     setAutoDelete(true);
     m_running.insert(this);
+    if (ImgView * imgview = qobject_cast<ImgView*>(parent)) {
+        connect(this, &ImgLoaderTask::loaded, imgview, &ImgView::loaded);
+    }
     if (!m_imagehashstore) {
         m_imagehashstore = new ImageHashStore;
     }
 }
 
-ImgLoaderTask::~ImgLoaderTask()
-{
+ImgLoaderTask::ImgLoaderTask(ImageItem* s, QObject * parent):ImgLoaderTask(parent){
+    m_image_item = s;
+    QThreadPool::globalInstance()->start(this);
+}
+
+ImgLoaderTask::ImgLoaderTask(QSet<ImageItem*> items, QObject * parent):ImgLoaderTask(parent){
+    m_image_items = std::move(items);
+    QThreadPool::globalInstance()->start(this);
+}
+
+ImgLoaderTask::~ImgLoaderTask(){
     QMutexLocker locker(&m_mutex);
     m_running.remove(this);
 }
 
-qsizetype ImgLoaderTask::runningCount()
-{
+qsizetype ImgLoaderTask::runningCount(){
     QMutexLocker locker(&m_mutex);
     return m_running.size();
 }
