@@ -1,4 +1,4 @@
-#include "imagehashstore.h"
+#include "ImageHashStore.h"
 #include <QBuffer>
 #include <QDebug>
 #include <QSqlError>

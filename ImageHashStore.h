@@ -1,5 +1,4 @@
 #pragma once
-#include <QByteArray>
 #include <QCryptographicHash>
 #include <QImage>
 #include <QSqlDatabase>

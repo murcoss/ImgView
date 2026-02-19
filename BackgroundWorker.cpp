@@ -4,6 +4,7 @@
 #include <QPixmap>
 #include <QImageReader>
 #include <QThreadPool>
+#include <QElapsedTimer>
 
 #include "BackgroundWorker.h"
 #include "ImgView.h"

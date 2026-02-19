@@ -11,7 +11,7 @@ if (MSVC)
 endif()
 
 # Find Qt (adjust version as needed)
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Concurrent Svg)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Concurrent Svg Sql)
 
 # Or use Qt5 (uncomment this and comment out the Qt6 line above if using Qt5)
 # find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets Concurrent Svg)
@@ -20,6 +20,8 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Concurrent Svg)
 set(SOURCES
     IconEngine.cpp
     ImgView.cpp
+    BackgroundWorker.cpp
+    ImageHashStore.cpp
     main.cpp
 )
 
@@ -27,6 +29,9 @@ set(SOURCES
 set(HEADERS
     ImgView.h
     MainWindow.h
+    BackgroundWorker.h
+    ImageHashStore.h
+    main.cpp
 )
 
 # Resources
@@ -54,6 +59,7 @@ target_link_libraries(ImgViewer PRIVATE
     Qt6::Widgets
     Qt6::Concurrent
     Qt6::Svg
+    Qt6::Sql
 )
 
 # Add include directory if needed
