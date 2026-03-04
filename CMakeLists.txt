@@ -1,12 +1,16 @@
 cmake_minimum_required(VERSION 3.21)
 project(ImgViewer LANGUAGES CXX)
 
+
+# Export compile commands for clangd / VSCode
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Use C++20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Enable multi-core compilation
-if (MSVC)
+if(MSVC)
     add_compile_options(/MP)
 endif()
 
@@ -20,8 +24,11 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Concurrent Svg Sql)
 set(SOURCES
     IconEngine.cpp
     ImgView.cpp
-    BackgroundWorker.cpp
+    ImageLoaderTask.cpp
     ImageHashStore.cpp
+    ImageItem.cpp
+    ImageLoaderQueue.cpp
+    DirIteratorTask.cpp
     main.cpp
 )
 
@@ -29,8 +36,10 @@ set(SOURCES
 set(HEADERS
     ImgView.h
     MainWindow.h
-    BackgroundWorker.h
+    ImageLoaderTask.h
     ImageHashStore.h
+    ImageLoaderQueue.h
+    DirIteratorTask.h
     main.cpp
 )
 
@@ -48,7 +57,7 @@ add_executable(ImgViewer
 )
 
 # Windows subsystem (no console window)
-if (WIN32)
+if(WIN32)
     set_target_properties(ImgViewer PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
@@ -71,3 +80,8 @@ set_target_properties(ImgViewer PROPERTIES
     AUTOUIC ON
     AUTORCC ON
 )
+
+# Remove GCC-only flags when using clangd
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    string(REPLACE "-mno-direct-extern-access" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+endif()

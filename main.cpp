@@ -1,20 +1,20 @@
-#include <QApplication>
-#include <QStyleFactory>
-#include <QImageReader>
 #include "MainWindow.h"
+#include <QApplication>
+#include <QImageReader>
+#include <QStyleFactory>
 
-int main(int argc, char* argv[]) {
-    QApplication app(argc, argv);
-    app.setStyle(QStyleFactory::create(QStringLiteral(u"Fusion")));
 
-    QCoreApplication::setOrganizationName(QStringLiteral("ImgView"));
-    QCoreApplication::setApplicationName(QStringLiteral("ImgView"));
-    QImageReader::setAllocationLimit(1024 * 1024 * 1024);
+int main(int argc, char *argv[]) {
+  QApplication app(argc, argv);
+  app.setStyle(QStyleFactory::create(QStringLiteral(u"Fusion")));
 
-    QStringList files = QCoreApplication::arguments();
-    files.pop_front();
-    MainWindow mainwindow(files);
-    mainwindow.show();
+  QCoreApplication::setOrganizationName(QStringLiteral("ImgView"));
+  QCoreApplication::setApplicationName(QStringLiteral("ImgView"));
+  QImageReader::setAllocationLimit(1024 * 1024 * 1024);
 
-    return app.exec();
+  QStringList files = QCoreApplication::arguments();
+  files.pop_front();
+  MainWindow mainwindow(files);
+  mainwindow.show();
+  return app.exec();
 }
