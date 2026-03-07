@@ -12,8 +12,6 @@
 #include <qvariant.h>
 
 #include "DirIteratorTask.h"
-#include "IconEngine.h"
-#include "ImageLoaderTask.h"
 #include "ImgView.h"
 
 ImgView::ImgView(QWidget *parent) {
@@ -330,6 +328,9 @@ void ImgView::nextImage(FileDir fd) {
 
   if (m_allImages.isEmpty()) {
     return;
+  }
+  if (m_mainImage == 0) {
+    m_mainImage = m_allImages[0];
   }
 
   if (fd != FileDir::none) {

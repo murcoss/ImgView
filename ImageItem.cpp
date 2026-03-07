@@ -45,21 +45,20 @@ void ImageItem::haveThumbnail() {
 
 void ImageItem::setImage(QImage img) {
   m_img = QPixmap::fromImage(img);
-  size = img.size();
+  size = img.size().toSizeF().scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
 }
 
 void ImageItem::setThumb(QImage thumb, QSize imgsize) {
   m_thumbnail = QPixmap::fromImage(thumb);
   thumbsize =
       thumb.size().toSizeF().scaled(QSizeF(1., 1.), Qt::KeepAspectRatio);
-  size = imgsize;
 }
 
 void ImageItem::draw(QPainter &p, QPointF mousepos) {
   if (!m_visible) {
     return;
   }
-  QRectF const rect = thumbrect();
+  QRectF rect = thumbrect();
   QPen pen = p.pen();
   pen.setCosmetic(true);
   p.setPen(pen);
@@ -79,8 +78,10 @@ void ImageItem::draw(QPainter &p, QPointF mousepos) {
 
   // Draw rect or thumb or real image
   if (!m_img.isNull()) {
+    rect.setSize(size);
     p.drawPixmap(rect, m_img, QRectF(QPointF(0, 0), m_img.size()));
   } else if (!m_thumbnail.isNull()) {
+    rect.setSize(thumbsize);
     p.drawPixmap(rect, m_thumbnail, QRectF(QPointF(0, 0), m_thumbnail.size()));
   } else {
     p.setPen(QPen(Qt::black, 0));
