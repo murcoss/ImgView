@@ -21,8 +21,6 @@ private:
 
   ImageInfo m_imageinfo;
 
-  static inline ImageHashStore *m_imagehashstore = nullptr;
-
 public:
   ImageLoaderTask(ImageInfo wi);
   static int runningCount();

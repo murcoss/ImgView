@@ -3,8 +3,8 @@
 #include <QPixmap>
 
 #include "ImageInfo.h"
+#include "ImageItem.h"
 #include "ImageLoaderQueue.h"
-#include "qpixmap.h"
 
 QRectF ImageItem::thumbrect() const {
   QPointF topLeft(grid_idx.x(), grid_idx.y());
@@ -34,7 +34,7 @@ void ImageItem::haveBigImage() {
   }
 }
 
-void ImageItem::haveThumbnail() const {
+void ImageItem::haveThumbnail() {
   if (!m_requested_thumb) {
     ImageInfo ii = m_imageinfo;
     ii.worktype = ImageInfo::WorkType::loadThumbnail256;
@@ -55,7 +55,7 @@ void ImageItem::setThumb(QImage thumb, QSize imgsize) {
   size = imgsize;
 }
 
-void ImageItem::draw(QPainter &p, QPointF mousepos) const {
+void ImageItem::draw(QPainter &p, QPointF mousepos) {
   if (!m_visible) {
     return;
   }
@@ -67,10 +67,17 @@ void ImageItem::draw(QPainter &p, QPointF mousepos) const {
   double wi = deviceArea.width();
   double he = deviceArea.height();
 
+  // Get thumbnail
   if (m_thumbnail.isNull()) {
     haveThumbnail();
   }
 
+  QTransform t = p.worldTransform();
+  QTransform inv = t.inverted();
+  QRectF logicalRect = t.mapRect(QRectF(rect));
+  preloadSize(logicalRect.width() > 256);
+
+  // Draw rect or thumb or real image
   if (!m_img.isNull()) {
     p.drawPixmap(rect, m_img, QRectF(QPointF(0, 0), m_img.size()));
   } else if (!m_thumbnail.isNull()) {
@@ -79,11 +86,11 @@ void ImageItem::draw(QPainter &p, QPointF mousepos) const {
     p.setPen(QPen(Qt::black, 0));
     p.drawRect(rect);
   }
+
+  // draw red rect around hovered image
   if (rect.contains(mousepos)) {
     p.setPen(QPen(Qt::red, 0));
-    QTransform t = p.worldTransform();
     QTransform inv = t.inverted();
-    QRectF logicalRect = t.mapRect(QRectF(rect));
     logicalRect.adjust(-1, -1, 1, 1);
     QRectF deviceRect = inv.mapRect(logicalRect);
     p.drawRect(deviceRect);

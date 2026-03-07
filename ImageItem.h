@@ -28,7 +28,7 @@ public:
   void preloadSize(bool haveit);
   inline int idx() const { return m_idx; }
   inline void setIdx(int idx) { m_idx = idx; }
-  void draw(QPainter &painter, QPointF mousepos) const;
+  void draw(QPainter &painter, QPointF mousepos);
   inline ImageInfo const &imageinfo() const { return m_imageinfo; }
   static void setXdim(int xdim) { m_xdim = xdim; }
   void setVisible(bool visible) { m_visible = visible; }
@@ -46,7 +46,7 @@ private:
   int m_idx = -1;
   static inline int m_xdim = 0;
   bool m_visible = 0;
-  mutable bool m_requested_thumb = false;
+  bool m_requested_thumb = false;
   void haveBigImage();
-  void haveThumbnail() const;
+  void haveThumbnail();
 };

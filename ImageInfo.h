@@ -1,7 +1,6 @@
 #pragma once
-#include "qobject.h"
-#include "qtmetamacros.h"
 #include <QFileInfo>
+#include <QString>
 
 struct ImageInfo {
   enum class WorkType { none, loadImage, loadThumbnail256, destroyImage };
