@@ -17,16 +17,23 @@
     <QtMoc Include="MainWindow.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="BackgroundWorker.cpp" />
+    <ClCompile Include="DirIteratorTask.cpp" />
     <ClCompile Include="IconEngine.cpp" />
     <ClCompile Include="ImageHashStore.cpp" />
+    <ClCompile Include="ImageItem.cpp" />
+    <ClCompile Include="ImageLoaderQueue.cpp" />
+    <ClCompile Include="ImageLoaderTask.cpp" />
     <ClCompile Include="ImgView.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <QtMoc Include="BackgroundWorker.h" />
+    <ClInclude Include="DirIteratorTask.h" />
     <ClInclude Include="IconEngine.h" />
     <ClInclude Include="ImageHashStore.h" />
+    <ClInclude Include="ImageInfo.h" />
+    <ClInclude Include="ImageItem.h" />
+    <ClInclude Include="ImageLoaderQueue.h" />
+    <ClInclude Include="ImageLoaderTask.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

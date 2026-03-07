@@ -56,7 +56,7 @@ void ImageLoaderTask::run() {
 
     emit loadedThumb(std::move(thumb), image.size());
   } else if (m_imageinfo.worktype == ImageInfo::WorkType::loadImage) {
-    QImage const img(m_imageinfo.fi.absoluteFilePath());
+    QImage img(m_imageinfo.fi.absoluteFilePath());
     emit loadedImage(std::move(img));
   }
 }
