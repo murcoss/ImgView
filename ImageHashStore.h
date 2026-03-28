@@ -6,16 +6,25 @@
 #include <QMutex>
 #include <QSqlQuery>
 
-class ImageHashStore {
+#include "WorkItem.h"
+
+class ImageHashStore : public QObject
+{
+    Q_OBJECT
+
 public:
-    ImageHashStore();
+    explicit ImageHashStore(QObject* parent = nullptr);
     ~ImageHashStore();
 
-    void insert(QImage thumb, QByteArray const hash, QString const filepath, uint64_t filesize);
-    QByteArray getByHash(const QByteArray hash);
+public slots:
+    void insertThumb(WorkItem wi, QByteArray thumbdata);
+    void requestThumb(WorkItem wi);
+    void init();
+
+signals:
+    void thumbReady(WorkItem wi, QImage thumb, QSize si);
 
 private:
     QSqlDatabase db;
-    QMutex lock;
     QSqlQuery m_insert_query, m_get_by_hash_query;
 };

@@ -10,7 +10,7 @@
 #include <qobject.h>
 
 #include "ImageHashStore.h"
-#include "ImageInfo.h"
+#include "WorkItem.h"
 
 class ImageLoaderTask : public QObject, public QRunnable {
   Q_OBJECT
@@ -19,15 +19,15 @@ private:
   void readImageData(QString const filename, QByteArray &imageData);
   void readImage(QByteArray &imageData, QImage &image);
 
-  ImageInfo m_imageinfo;
+  WorkItem m_imageinfo;
 
-public:
-  ImageLoaderTask(ImageInfo wi);
+  public:
+  ImageLoaderTask(WorkItem wi);
   static int runningCount();
 
   void run() override;
 
 signals:
-  void loadedThumb(QImage thumb, QSize imagesize);
-  void loadedImage(QImage img);
+    void loaded(WorkItem wi, QImage img, QImage thumb, QSize si);
+    void loadedThumbData(WorkItem wi, QByteArray thumbdata);
 };

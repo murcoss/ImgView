@@ -6,7 +6,7 @@ void DirIteratorTask::run()
     QElapsedTimer ti;
     ti.start();
 
-    QList<ImageItem*> newimageitems;
+    QList<WorkItem> newimageitems;
 
     if (m_fns.isEmpty()) {
         return;
@@ -17,7 +17,7 @@ void DirIteratorTask::run()
     for (auto const& fn : m_fns) {
         QFileInfo const fi(fn);
         if (supportedExtensions().contains(fi.suffix().toLower())) {
-            newimageitems.push_back(new ImageItem(fi));
+            newimageitems.push_back(WorkItem(fi));
             filetoshowfirst = fn;
         }
     }
@@ -41,7 +41,7 @@ void DirIteratorTask::run()
         if (file != filetoshowfirst) {
             QFileInfo const fi(file);
             if (DirIteratorTask::supportedExtensions().contains(fi.suffix().toLower())) {
-                newimageitems.push_back(new ImageItem(fi));
+                newimageitems.push_back(WorkItem(fi));
             }
         }
 

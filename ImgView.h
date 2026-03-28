@@ -12,6 +12,7 @@
 #include <QWidget>
 
 #include "ImageItem.h"
+#include "ImageLoaderQueue.h"
 
 inline constexpr int fitincircularrange(int i, int size) {
   int r = i % size;
@@ -30,10 +31,11 @@ public:
   void autofit();
   void loadImage(QStringList filename);
   void openFolder(QString dir);
-  void loaded(ImageInfo info, ImageItem *imagestruct);
-  void loadedFilenames(QList<ImageItem *> is);
+  void loaded(WorkItem info);
+  void loadedFilenames(QList<WorkItem> is);
+  void loadedImage(WorkItem wi, QImage img, QImage thumb, QSize si);
 
-protected:
+  protected:
   void paintEvent(QPaintEvent *) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
@@ -62,6 +64,7 @@ private:
 
   QList<ImageItem *> m_allImages;
   ImageItem *m_mainImage = nullptr;
+  ImageLoaderQueue m_imageloaderqueue;
   QSizeF m_visibleImage_size;
   QMutex m_allImage_mutex;
   QVector<QPushButton *> m_buttons;

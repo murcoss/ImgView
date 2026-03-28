@@ -6,84 +6,73 @@
 #include <QSqlError>
 #include <QStandardPaths>
 
-ImageHashStore::ImageHashStore() {
-  QMutexLocker locker(&lock);
-  QString filename =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QDir dir(filename);
-
-  if (!dir.exists()) {
-    dir.mkpath(".");
-  }
-
-  filename.append(QStringLiteral(u"/thumbs.db"));
-
-  db = QSqlDatabase::addDatabase("QSQLITE", "ImageHashStoreConnection");
-  db.setDatabaseName(filename);
-  if (!db.open()) {
-    qDebug() << db.lastError().nativeErrorCode();
-    return;
-  }
-
-  QSqlQuery query(db);
-  if (!query.exec("CREATE TABLE IF NOT EXISTS images (hash BLOB PRIMARY KEY, "
-                  "image BLOB, filepath TEXT, filesize INTEGER)")) {
-    qWarning() << "Create table failed:" << query.lastError().text();
-    return;
-  }
-
-  m_insert_query = QSqlQuery(db);
-  m_insert_query.prepare("INSERT INTO images (hash, image, filepath, filesize) "
-                         "VALUES (:hash, :image, :filepath, :filesize)");
-
-  m_get_by_hash_query = QSqlQuery(db);
-  m_get_by_hash_query.prepare(
-      QStringLiteral(u"SELECT image FROM images WHERE hash = :hash"));
+ImageHashStore::ImageHashStore(QObject* parent)
+    : QObject(parent) {
 }
 
 ImageHashStore::~ImageHashStore() {
-  QMutexLocker locker(&lock);
-  if (db.isOpen()) {
-    db.close();
-  }
+    if (db.isOpen()) {
+        db.close();
+    }
 }
 
-void ImageHashStore::insert(QImage thumb, QByteArray const hash,
-                            QString const filepath, uint64_t filesize) {
-  QMutexLocker locker(&lock);
-  QByteArray buffer;
-  QBuffer qbuffer(&buffer);
-  qbuffer.open(QIODevice::WriteOnly);
-  thumb.save(&qbuffer, "JPEG", 100);
+void ImageHashStore::insertThumb(WorkItem wi, QByteArray buffer) {
+    qDebug() << "saved thumb with " << buffer.size() << "bytes";
 
-  // query.prepare("INSERT INTO images (hash, image, filepath, filesize) VALUES
-  // (:hash, :image, :filepath, :filesize)");
-  m_insert_query.finish();
-  m_insert_query.bindValue(":hash", hash);
-  m_insert_query.bindValue(":image", buffer);
-  m_insert_query.bindValue(":filepath", filepath);
-  m_insert_query.bindValue(":filesize", static_cast<qint64>(filesize));
+    m_insert_query.finish();
+    m_insert_query.bindValue(":hash", wi.m_hash);
+    m_insert_query.bindValue(":image", buffer);
+    m_insert_query.bindValue(":filepath", wi.fi.filePath());
+    m_insert_query.bindValue(":filesize", static_cast<qint64>(wi.fi.size()));
 
-  if (!m_insert_query.exec()) {
-    qWarning() << "Insert failed:" << m_insert_query.lastError().text();
-  }
+    if (!m_insert_query.exec()) {
+        qWarning() << "Insert failed:" << m_insert_query.lastError().text();
+    }
 
-  return;
+    return;
 }
 
-QByteArray ImageHashStore::getByHash(const QByteArray hash) {
-  QMutexLocker locker(&lock);
+void ImageHashStore::requestThumb(WorkItem wi) {
+    QByteArray imgData;
+    QSize si;
+    m_get_by_hash_query.finish();
+    m_get_by_hash_query.bindValue(":hash", wi.m_hash);
+    if (m_get_by_hash_query.exec()) {
+        if (m_get_by_hash_query.next()) {
+            imgData = m_get_by_hash_query.value(0).toByteArray();
+            si.setWidth(m_get_by_hash_query.value(1).toInt());
+            si.setHeight(m_get_by_hash_query.value(2).toInt());
+        }
+    }
+    emit thumbReady(wi, QImage(imgData), si);
+}
 
-  m_get_by_hash_query.finish();
-  m_get_by_hash_query.bindValue(":hash", hash);
-  if (!m_get_by_hash_query.exec()) {
-    return QByteArray();
-  }
+void ImageHashStore::init() {
+    QString filename = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 
-  if (m_get_by_hash_query.next()) {
-    QByteArray const imgData = m_get_by_hash_query.value(0).toByteArray();
-    return imgData;
-  }
+    QDir().mkpath(filename);
+    filename += "/thumbs.db";
 
-  return QByteArray();
+    db = QSqlDatabase::addDatabase("QSQLITE", "ImageHashStoreConnection");
+    db.setDatabaseName(filename);
+    if (!db.open()) {
+        qDebug() << db.lastError().nativeErrorCode();
+        return;
+    }
+
+    QSqlQuery pragma(db);
+    pragma.exec("PRAGMA journal_mode=WAL;");
+    pragma.exec("PRAGMA synchronous=NORMAL;");
+
+    QSqlQuery query(db);
+    if (!query.exec("CREATE TABLE IF NOT EXISTS images (hash BLOB PRIMARY KEY, image BLOB, filepath TEXT, filesize INTEGER, width INTEGER, height INTEGER)")) {
+        qWarning() << "Create table failed:" << query.lastError().text();
+        return;
+    }
+
+    m_insert_query = QSqlQuery(db);
+    m_insert_query.prepare("INSERT OR REPLACE INTO images VALUES (:hash, :image, :filepath, :filesize, :width, :height)");
+
+    m_get_by_hash_query = QSqlQuery(db);
+    m_get_by_hash_query.prepare(QStringLiteral(u"SELECT image, width, height FROM images WHERE hash = :hash"));
 }

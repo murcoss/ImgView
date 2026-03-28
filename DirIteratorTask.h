@@ -4,7 +4,7 @@
 #include <QDirIterator>
 #include <QImageReader>
 
-#include "ImageItem.h"
+#include "WorkItem.h"
 
 class DirIteratorTask : public QObject, public QRunnable {
     Q_OBJECT
@@ -33,5 +33,5 @@ public:
     void run() override;
 
 signals:
-    void loadedFilenames(QList<ImageItem*> list);
+    void loadedFilenames(QList<WorkItem> list);
 };

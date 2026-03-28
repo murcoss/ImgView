@@ -1,17 +1,23 @@
 #include <QObject>
 
 #include "ImageHashStore.h"
-#include "ImageInfo.h"
+#include "WorkItem.h"
 #include "qmutex.h"
 
 class ImageLoaderQueue : public QObject {
-  static inline QMutex m_set_mutex;
-  static inline int m_num_running = 0;
-  static inline ImageHashStore *m_imagehashstore = nullptr;
-  static QByteArray generatehash(QFileInfo const fi);
+    Q_OBJECT
+    QMutex m_set_mutex;
+    int m_num_running = 0;
+    QByteArray generatehash(QFileInfo const fi);
+    ImageHashStore *m_imagehashstore = nullptr;
 
 public:
-  ImageLoaderQueue() = delete; // only static use
-  static void insert(ImageInfo const &info);
-  static void insertThumb(QImage const thumb, QFileInfo const fi);
+    ImageLoaderQueue();
+    void insert(WorkItem wi);
+    void requestImage(WorkItem wi);
+    void setThumbFromDatabase(WorkItem wi, QImage thumb, QSize si);
+
+signals:
+    void requestThumbFromDatabase(WorkItem wi);
+    void requestReady(WorkItem wi, QImage image, QImage thumb, QSize si);
 };
