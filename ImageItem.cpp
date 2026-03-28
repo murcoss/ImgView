@@ -13,17 +13,11 @@ ImageItem::ImageItem(QFileInfo fi) {
                                 .arg(m_imageinfo.fi.size())
                                 .arg(m_imageinfo.fi.lastModified().toSecsSinceEpoch());
     m_imageinfo.m_hash = QCryptographicHash::hash(textkey.toUtf8(), QCryptographicHash::Sha256);
+
+    WorkItem wi = m_imageinfo;
+    wi.loadthumb = true;
+    emit requestImageData(wi);
 };
-
-QByteArray ImageItem::hash() const {
-    return m_imageinfo.m_hash;
-}
-
-QRectF ImageItem::thumbrect() const {
-    QPointF topLeft(grid_idx.x(), grid_idx.y());
-    QRectF const rect(topLeft, QSizeF(1, 1));
-    return rect;
-}
 
 void ImageItem::preloadNext(bool haveit) {
     m_havebigimage_nextimage = haveit;
@@ -36,28 +30,18 @@ void ImageItem::preloadSize(bool haveit) {
 }
 
 void ImageItem::haveBigImage() {
-    bool const haveit = m_havebigimage_nextimage || m_havebigimage_size;
+    bool const haveit = m_havebigimage_nextimage || (m_havebigimage_size && m_visible);
     if (haveit) {
         if (m_img.isNull()) {
-            WorkItem wi = m_imageinfo;
-            wi.loadimage = true;
-            if (!m_requested_thumb) {
-                wi.loadthumb = true;
-                m_requested_thumb = true;
-            }
-            emit requestImageData(wi);
+            m_imageinfo.loadimage = true;
+            m_imageinfo.loadthumb = true;
+            emit requestImageData(m_imageinfo);
         }
     } else {
-        m_img = QPixmap();
-    }
-}
-
-void ImageItem::haveThumbnail() {
-    if (!m_requested_thumb) {
-        WorkItem wi = m_imageinfo;
-        wi.loadthumb = true;
-        emit requestImageData(wi);
-        m_requested_thumb = true;
+        m_imageinfo.loadimage = false;
+        if (!m_img.isNull()) {
+            m_img = QPixmap();
+        }
     }
 }
 
@@ -75,6 +59,7 @@ void ImageItem::setThumb(WorkItem wi, QImage thumb, QSize imgsize) {
 
 void ImageItem::draw(QPainter &p, QPointF mousepos) {
     if (!m_visible) {
+        haveBigImage();
         return;
     }
     QRectF rect = thumbrect();
@@ -82,17 +67,14 @@ void ImageItem::draw(QPainter &p, QPointF mousepos) {
     pen.setCosmetic(true);
     p.setPen(pen);
 
-    // Get thumbnail
-    if (m_thumbnail.isNull()) {
-        haveThumbnail();
-    }
-
     QTransform t = p.worldTransform();
     QRectF logicalRect = t.mapRect(QRectF(rect));
     preloadSize(logicalRect.width() > 256);
 
+    bool const undermouse = rect.contains(mousepos);
+
     // Draw rect or thumb or real image
-    if (!m_img.isNull()) {
+    if (undermouse && !m_img.isNull()) {
         rect.setSize(size);
         p.drawPixmap(rect, m_img, QRectF(QPointF(0, 0), m_img.size()));
     } else if (!m_thumbnail.isNull()) {
@@ -104,7 +86,7 @@ void ImageItem::draw(QPainter &p, QPointF mousepos) {
     }
 
     // draw red rect around hovered image
-    if (rect.contains(mousepos)) {
+    if (undermouse) {
         p.setPen(QPen(Qt::red, 0));
         QTransform inv = t.inverted();
         logicalRect.adjust(1, 1, -1, -1);

@@ -29,5 +29,5 @@ private:
 
 signals:
     void loaded(WorkItem wi, QImage img, QImage thumb, QSize si);
-    void loadedThumbData(WorkItem wi, QByteArray thumbdata);
+    void loadedThumbData(WorkItem wi, QByteArray thumbdata, QSize si);
 };

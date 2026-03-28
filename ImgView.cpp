@@ -107,7 +107,7 @@ ImgView::ImgView(QWidget *p)
         settings.setValue("Wheel zoom", m_wheel_zoom);
     });
 
-    QThreadPool::globalInstance()->setMaxThreadCount(QThread::idealThreadCount());
+    QThreadPool::globalInstance()->setMaxThreadCount(QThread::idealThreadCount() / 3 * 2);
 
     connect(&m_imageloaderqueue, &ImageLoaderQueue::requestReady, this, &ImgView::loadedImage);
 };
@@ -311,8 +311,7 @@ void ImgView::loadedFilenames(QList<WorkItem> is) {
     ImageItem::setXdim(dim);
     int x = 0, y = 0, idx = 0;
     for (auto *ii : m_allImages) {
-        ii->grid_idx = QPoint(x, y);
-        ii->setIdx(idx++);
+        ii->setIdx(idx++, QPoint(x, y));
         x++;
         if (x >= dim) {
             x = 0;

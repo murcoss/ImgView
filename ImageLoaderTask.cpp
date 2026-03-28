@@ -39,20 +39,13 @@ void ImageLoaderTask::run() {
     QSize si;
     QByteArray imageData;
 
-    qDebug() << "reading " << m_imageinfo.fi.absoluteFilePath();
+    qDebug() << "reading " << m_imageinfo.fi.fileName();
 
     if (m_imageinfo.loadimage) {
         image = QImage(m_imageinfo.fi.absoluteFilePath());
         si = image.size();
     }
 
-<<<<<<< HEAD
-    emit loadedThumb(std::move(thumb), image.size());
-  } else if (m_imageinfo.worktype == ImageInfo::WorkType::loadImage) {
-    QImage img(m_imageinfo.fi.absoluteFilePath());
-    emit loadedImage(std::move(img));
-  }
-=======
     if (m_imageinfo.loadthumb) {
         if (image.isNull()) {
             QImageReader reader(m_imageinfo.fi.absoluteFilePath());
@@ -70,11 +63,10 @@ void ImageLoaderTask::run() {
         QBuffer qbuffer(&buffer);
         qbuffer.open(QIODevice::WriteOnly);
         thumb.save(&qbuffer, "WEBP", 80);
-        emit loadedThumbData(m_imageinfo, std::move(buffer));
+        emit loadedThumbData(m_imageinfo, std::move(buffer), si);
     }
 
     emit loaded(m_imageinfo, std::move(image), std::move(thumb), si);
->>>>>>> d9f50c8 (wip)
 }
 
 ImageLoaderTask::ImageLoaderTask(WorkItem info) {

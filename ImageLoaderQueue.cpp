@@ -19,6 +19,7 @@ ImageLoaderQueue::ImageLoaderQueue() {
 }
 
 void ImageLoaderQueue::insert(WorkItem wi) {
+    qDebug() << "imageloaderqueue insert " << wi.fi.fileName();
     if (wi.loadimage) {
         requestImage(wi);
     } else if (wi.loadthumb) {

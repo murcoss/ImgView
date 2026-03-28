@@ -16,7 +16,7 @@ ImageHashStore::~ImageHashStore() {
     }
 }
 
-void ImageHashStore::insertThumb(WorkItem wi, QByteArray buffer) {
+void ImageHashStore::insertThumb(WorkItem wi, QByteArray buffer, QSize si) {
     qDebug() << "saved thumb with " << buffer.size() << "bytes";
 
     m_insert_query.finish();
@@ -24,6 +24,8 @@ void ImageHashStore::insertThumb(WorkItem wi, QByteArray buffer) {
     m_insert_query.bindValue(":image", buffer);
     m_insert_query.bindValue(":filepath", wi.fi.filePath());
     m_insert_query.bindValue(":filesize", static_cast<qint64>(wi.fi.size()));
+    m_insert_query.bindValue(":width", static_cast<qint64>(si.width()));
+    m_insert_query.bindValue(":height", static_cast<qint64>(si.height()));
 
     if (!m_insert_query.exec()) {
         qWarning() << "Insert failed:" << m_insert_query.lastError().text();
@@ -42,6 +44,7 @@ void ImageHashStore::requestThumb(WorkItem wi) {
             imgData = m_get_by_hash_query.value(0).toByteArray();
             si.setWidth(m_get_by_hash_query.value(1).toInt());
             si.setHeight(m_get_by_hash_query.value(2).toInt());
+            qDebug() << "imagehashstore requestthumb " << imgData.size();
         }
     }
     emit thumbReady(wi, QImage(imgData), si);

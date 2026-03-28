@@ -17,7 +17,7 @@ public:
     ~ImageHashStore();
 
 public slots:
-    void insertThumb(WorkItem wi, QByteArray thumbdata);
+    void insertThumb(WorkItem wi, QByteArray thumbdata, QSize si);
     void requestThumb(WorkItem wi);
     void init();
 
