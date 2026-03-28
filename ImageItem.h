@@ -11,9 +11,9 @@
 
 #include "WorkItem.h"
 
-class ImageItem : public QObject
-{
+class ImageItem : public QObject{
     Q_OBJECT
+
 public:
     ImageItem(QObject *p)
         : QObject(p) {

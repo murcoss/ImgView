@@ -27,14 +27,14 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="DirIteratorTask.h" />
+    <QtMoc Include="DirIteratorTask.h" />
     <ClInclude Include="IconEngine.h" />
-    <ClInclude Include="ImageHashStore.h" />
-    <ClInclude Include="ImageInfo.h" />
-    <ClInclude Include="ImageItem.h" />
-    <ClInclude Include="ImageLoaderQueue.h" />
-    <ClInclude Include="ImageLoaderTask.h" />
+    <QtMoc Include="ImageHashStore.h" />
+    <QtMoc Include="ImageItem.h" />
+    <QtMoc Include="ImageLoaderQueue.h" />
+    <QtMoc Include="ImageLoaderTask.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="WorkItem.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="ImgViewLogo.ico" />

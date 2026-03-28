@@ -21,7 +21,8 @@ public:
         static QSet<QString> extensions = [] {
             QSet<QString> ext;
             for (const auto& b : QImageReader::supportedImageFormats()) {
-                if (b != "svg" && b != "ico") {
+                QString fmt = QString::fromUtf8(b);
+                if (fmt != "svg" && fmt != "ico") {
                     ext.insert(QString::fromLatin1(b).toLower());
                 }
             }

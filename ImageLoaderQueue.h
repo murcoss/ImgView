@@ -6,11 +6,6 @@
 
 class ImageLoaderQueue : public QObject {
     Q_OBJECT
-    QMutex m_set_mutex;
-    int m_num_running = 0;
-    QByteArray generatehash(QFileInfo const fi);
-    ImageHashStore *m_imagehashstore = nullptr;
-
 public:
     ImageLoaderQueue();
     void insert(WorkItem wi);
@@ -20,4 +15,10 @@ public:
 signals:
     void requestThumbFromDatabase(WorkItem wi);
     void requestReady(WorkItem wi, QImage image, QImage thumb, QSize si);
+
+private:
+    QMutex m_set_mutex;
+    int m_num_running = 0;
+    QByteArray generatehash(QFileInfo const fi);
+    ImageHashStore *m_imagehashstore = nullptr;
 };

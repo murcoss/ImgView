@@ -15,17 +15,17 @@
 class ImageLoaderTask : public QObject, public QRunnable {
   Q_OBJECT
 
+ public:
+  ImageLoaderTask(WorkItem wi);
+  static int runningCount();
+
+  void run() override;
+
 private:
   void readImageData(QString const filename, QByteArray &imageData);
   void readImage(QByteArray &imageData, QImage &image);
 
   WorkItem m_imageinfo;
-
-  public:
-  ImageLoaderTask(WorkItem wi);
-  static int runningCount();
-
-  void run() override;
 
 signals:
     void loaded(WorkItem wi, QImage img, QImage thumb, QSize si);

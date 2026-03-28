@@ -39,7 +39,6 @@ set(HEADERS
     ImageLoaderTask.h
     ImageHashStore.h
     ImageLoaderQueue.h
-    ImageInfo.h
     DirIteratorTask.h
     main.cpp
 )

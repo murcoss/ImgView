@@ -8,10 +8,8 @@
 
 #include "WorkItem.h"
 
-class ImageHashStore : public QObject
-{
+class ImageHashStore : public QObject{
     Q_OBJECT
-
 public:
     explicit ImageHashStore(QObject* parent = nullptr);
     ~ImageHashStore();
